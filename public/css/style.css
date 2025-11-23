@@ -1,0 +1,180 @@
+    /* .text-text-primary {
+    color: #F8BBD9; /* رمادي أفتح قليلاً - مريح للعين  }*/
+
+:root {
+  --primary-color: #6b14d4; /* لون وردي جميل متناسق مع التصميم */
+} 
+
+.dark .text-text-primary {
+
+    color: #E5E7EB; /* في الوضع الداكن */
+}
+html, body {
+  overflow-x: hidden;  /* remove horizontal scroll */
+
+}
+
+button.bg-\[var\(--primary-color\)\] {
+  background: linear-gradient(135deg, #6b14d4, #7f3aed);
+}
+
+/* اجعل الهيدر ثابت */
+header {
+    position: sticky;
+    top: 0;
+    z-index: 50; /* فوق باقي العناصر */
+}
+
+/* اجعل القائمة الجانبية ثابتة */
+aside {
+    position: fixed;
+    top: 0;
+    right: 0; /* لأن RTL */
+    height: 100vh;
+    overflow-y: auto;
+    z-index: 40;
+}
+
+/* اضبط مساحة المحتوى حتى ما يدخل تحت السايدبار */
+main {
+    margin-right: 18rem; /* نفس عرض السايدبار */
+}
+
+
+    body { font-family: 'IBM Plex Sans Arabic', sans-serif; }
+    .submenu { display: none; }
+    .submenu.active { display: block; }
+    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    /* Simple dropdown visibility helpers */
+    .dropdown { visibility: hidden; opacity: 0; transform: translateY(6px); transition: .18s ease; }
+    .dropdown.show { visibility: visible; opacity: 1; transform: translateY(0); }
+  /* //mobie side bar */
+  
+  /* ===== Overlay خلفية شفافة ===== */
+.overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(1px);
+  z-index: 40;
+  transition: opacity 0.3s ease;
+}
+/* ===== القائمة الجانبية في الجوال ===== */
+@media (max-width: 1024px) {
+  :root {
+  --primary-color: #6b14d4; /* لون وردي جميل متناسق مع التصميم */
+} 
+  aside {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 17rem;
+    height: 100vh;
+    background: white;
+    transform: translateX(100%);
+    box-shadow: -3px 0 10px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+    z-index: 50;
+  }
+
+  aside.open {
+    transform: translateX(0);
+  }
+
+  main {
+    margin-right: 0 !important;
+  }
+}
+
+/* تحسين مظهر البحث */
+input[type="text"]::placeholder {
+  color: #a48fc7; /* بنفسجي باهت */
+  transition: color 0.3s ease;
+}
+
+input[type="text"]:focus::placeholder {
+  color: #d2b7ff; /* بنفسجي فاتح عند التركيز */
+}
+
+/* تأثير أنيق عند التركيز */
+div.relative:focus-within {
+  box-shadow: 0 0 0 3px rgba(107, 20, 212, 0.15);
+  transform: translateY(-1px);
+}
+
+/* الزر البنفسجي */
+button.bg-\[var\(--primary-color\)\] {
+  box-shadow: 0 2px 6px rgba(107, 20, 212, 0.25);
+}
+
+/* عند تمرير الماوس */
+button.bg-\[var\(--primary-color\)\]:hover {
+  transform: scale(1.05);
+}
+
+/* تحسين شكل الجدول */
+table thead tr {
+  background: linear-gradient(to left, #f9f5ff, #fef6fb);
+}
+table tbody tr:hover {
+  background-color: #fdf3ff;
+}
+
+/* الزر البنفسجي */
+button.bg-\[var\(--primary-color\)\] {
+  box-shadow: 0 2px 6px rgba(107, 20, 212, 0.25);
+}
+
+/* النصوص */
+.text-\[var\(--primary-color\)\] {
+  color: #7a29e0;
+}
+
+.dress_pagination li a,
+.dress_pagination li span {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 2px solid var(--primary-color);
+    color: var(--primary-color);
+    font-weight: bold;
+    transition: all 0.2s ease-in-out;
+}
+
+.dress_pagination li.active span {
+    background: var(--primary-color);
+    color: white;
+}
+
+.dress_pagination li a:hover {
+    background: var(--primary-color);
+    color: white;
+    transform: scale(1.07);
+}
+
+/* Disable arrows */
+.dress_pagination li.disabled span {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.dress_pagination li {
+    list-style: none;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); opacity: 0.5; }
+  50% { transform: translateY(-15px); opacity: 1; }
+}
+
+.animate-bounce {
+  animation: bounce 0.6s infinite alternate;
+}
+
+.delay-200 { animation-delay: 0.2s; }
+.delay-400 { animation-delay: 0.4s; }
+

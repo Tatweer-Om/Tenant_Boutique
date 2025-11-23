@@ -1,0 +1,176 @@
+<script>
+$(document).ready(function() {
+    $('#add_material').on('submit', function(e) {
+        e.preventDefault();
+
+        // --- Manual validations ---
+        let material_name     = $('#material_name').val().trim();
+        let material_notes    = $('#material_notes').val().trim();
+        let material_unit     = $('#material_unit').val();
+        let material_category = $('#material_category').val();
+
+        if (!material_name) {
+            show_notification('error', '<?= trans("messages.enter_material_name", [], session("locale")) ?>');
+            return;
+        }
+
+        if (!material_notes) {
+            show_notification('error', '<?= trans("messages.enter_material_notes", [], session("locale")) ?>');
+            return;
+        }
+
+        if (!material_unit) {
+            show_notification('error', '<?= trans("messages.enter_material_unit", [], session("locale")) ?>');
+            return;
+        }
+
+        if (!material_category) {
+            show_notification('error', '<?= trans("messages.enter_material_category", [], session("locale")) ?>');
+            return;
+        }
+
+        // --- FormData (includes file) ---
+        let formData = new FormData(this); // make sure <form> has enctype="multipart/form-data"
+
+        $.ajax({
+            url: "{{ route('add_material') }}",
+            type: "POST",
+            data: formData,
+            contentType: false,
+            processData: false,
+            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+            beforeSend: function() {
+                // optional loader
+            },
+            success: function(response) {
+                if(response.status === 'success') {
+                    show_notification('success', response.message);
+                    $('#add_material')[0].reset();
+                    $('#imagePreview').attr('src','').hide();
+                }
+            },
+            error: function(xhr) {
+                if(xhr.status === 422) {
+                    let errors = xhr.responseJSON.errors;
+                    $.each(errors, function(key, value) {
+                        show_notification('error', value[0]); // show first validation error
+                    });
+                } else {
+                    show_notification('error', 'Something went wrong!');
+                }
+            }
+        });
+    });
+
+      $('#abaya_form').on('submit', function(e) {
+    e.preventDefault();
+
+    let abaya_code = $('#abaya_code').val().trim();
+    let barcode = $('#barcode').val().trim();
+    let design_name = $('#design_name').val();
+let tailor = $('input[name="tailor_id[]"]:checked').map(function() {
+    return $(this).val();
+}).get();
+
+    if (!abaya_code) {
+        show_notification('error', '<?= trans("messages.enter_abaya_code", [], session("locale")) ?>');
+        return;
+    }
+    if (!barcode) {
+        show_notification('error', '<?= trans("messages.enter_barcode", [], session("locale")) ?>');
+        return;
+    }
+    if (!design_name) {
+        show_notification('error', '<?= trans("messages.enter_design_name", [], session("locale")) ?>');
+        return;
+    }
+    if (!tailor) {
+        show_notification('error', '<?= trans("messages.enter_tailor", [], session("locale")) ?>');
+        return;
+    }
+
+    let formData = new FormData(this);
+
+    // Manually append files from Alpine.js
+    let images = document.querySelector('#images').files; // or get from Alpine
+    for (let i = 0; i < images.length; i++) {
+        formData.append('images[]', images[i]);
+    }
+
+    $.ajax({
+        url: "{{ route('add_stock') }}",
+        type: "POST",
+        data: formData,
+        contentType: false,
+        processData: false,
+        headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+        beforeSend: function() {
+        },
+        success: function(response) {
+            if (response.status === 'success') {
+                show_notification('success', 'Stock added successfully!');
+                $('#abaya_form')[0].reset();
+                // Clear Alpine images array
+                if (window.imageUploaderComponent) {
+                    window.imageUploaderComponent.images = [];
+                }
+            }
+        },
+        error: function(xhr) {
+            if (xhr.status === 422) {
+                let errors = xhr.responseJSON.errors;
+                $.each(errors, function(key, value) {
+                    show_notification('error', value[0]); 
+                });
+            } else {
+                show_notification('error', 'Something went wrong!');
+            }
+        }
+    });
+});
+
+});
+
+
+document.getElementById('material_image').addEventListener('change', function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const img = document.getElementById('imagePreview');
+        img.src = e.target.result;
+        img.classList.remove('hidden');
+
+        // Hide icon and text
+        document.getElementById('uploadIcon').style.display = 'none';
+        document.getElementById('uploadText').style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+});
+function imageUploader() {
+    return {
+        images: [],
+        handleFiles(event) {
+            const files = event.target.files;
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    this.images.push({ file: file, url: e.target.result });
+                };
+                reader.readAsDataURL(file);
+            }
+        },
+        removeImage(index) {
+            this.images.splice(index, 1);
+        }
+    };
+}
+
+
+
+
+
+
+</script>
