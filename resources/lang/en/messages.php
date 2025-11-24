@@ -270,5 +270,25 @@ return [
     'pull_reason_placeholder' => 'e.g., Damage, previous entry error...',
     'cancel' => 'Cancel',
     'save_action' => 'Save Action',
+     'dashboard' => 'Dashboard',
+
+    'inventory_management' => 'Inventory Management',
+    'inventory' => 'Inventory',
+    'send_quantities' => 'Send Quantities',
+    'pos_points' => 'POS Points',
+
+    'boutique_management' => 'Boutique Management',
+    'boutique_list' => 'Boutique List',
+    'sub_categories' => 'Sub Categories',
+
+    'tailor_orders' => 'Tailor Orders',
+    'order_list' => 'Order List',
+    'tailors' => 'Tailors',
+
+    'pos' => 'Point of Sale',
+    'returns' => 'Returns',
+    'expenses' => 'Expenses',
+    'users' => 'Users',
+    'reports' => 'Reports',
 
 ];

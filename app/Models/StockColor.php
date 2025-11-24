@@ -6,6 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 
 class StockColor extends Model
 {
+
+     protected $table = 'stock_colors'; // matches your migration
+
+    protected $fillable = [
+        'stock_id',
+        'color_id',
+        'qty',
+    ];
         public function stock()
     {
         return $this->belongsTo(Stock::class);

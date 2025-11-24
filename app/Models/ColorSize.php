@@ -6,18 +6,33 @@ use Illuminate\Database\Eloquent\Model;
 
 class ColorSize extends Model
 {
+
+      protected $table = 'color_sizes'; // match your table name
+
+    protected $fillable = [
+        'stock_id',
+        'color_id',
+        'size_id',
+        'qty',
+    ];
+
+    public $timestamps = true;
+    
     public function stock()
     {
         return $this->belongsTo(Stock::class);
     }
 
-    public function color()
-    {
-        return $this->belongsTo(StockColor::class, 'color_id');
-    }
-
+      // Relationship to Size
     public function size()
     {
-        return $this->belongsTo(StockSize::class, 'size_id');
+        return $this->belongsTo(Size::class, 'size_id', 'id');
     }
+
+    // Relationship to Color
+    public function color()
+    {
+        return $this->belongsTo(Color::class, 'color_id', 'id');
+    }
+
 }
