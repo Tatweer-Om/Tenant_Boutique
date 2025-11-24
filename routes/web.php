@@ -106,7 +106,10 @@ Route::delete('/stock/image/{id}', [StockController::class, 'deleteImage'])->nam
 
 Route::get('/fetch_stock/{id}', [StockController::class, 'fetch_stock']);
 Route::delete('stock/{id}', [StockController::class, 'destroy'])->name('stock.destroy');
-Route::get('/stock/{id}', [StockController::class, 'details'])->name('stock.details');
+Route::get('stock_detail', [StockController::class, 'stock_detail'])->name('stock_detail');
+Route::get('get_stock_quantity', [StockController::class, 'get_stock_quantity'])->name('get_stock_quantity');
+Route::post('add_quantity', [StockController::class, 'add_quantity'])->name('add_quantity');
+
 Route::get('branch', [BranchController::class, 'index'])->name('branch');
 Route::post('add_branch', [BranchController::class, 'add_branch'])->name('add_branch');
 Route::get('show_branch', [BranchController::class, 'show_branch'])->name('show_branch');

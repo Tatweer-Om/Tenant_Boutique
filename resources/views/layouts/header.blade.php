@@ -14,6 +14,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
     <link href="{{asset('css/style.css')}}" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 
 <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.20/dist/sweetalert2.min.css" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
@@ -60,90 +61,119 @@
         </div>
 
         <!-- Nav -->
-        <nav class="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-          <!-- Dashboard -->
-          <a href="#" class="flex items-center gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent transition-colors">
-            <span class="material-symbols-outlined text-2xl">dashboard</span>
-            <span class="font-medium">الرئيسية</span>
-          </a>
+    <nav class="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
 
-          <!-- Inventory (collapsible) -->
-          <div>
-            <button onclick="toggleSubmenu('inventoryMenu')" class="w-full flex items-center justify-between gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent transition-colors">
-              <div class="flex items-center gap-4">
+    <!-- Dashboard -->
+    <a href="#" class="flex items-center gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent transition-colors">
+        <span class="material-symbols-outlined text-2xl">dashboard</span>
+        <span class="font-medium">{{ __('messages.dashboard') }}</span>
+    </a>
+
+    <!-- Inventory -->
+    <div>
+        <button onclick="toggleSubmenu('inventoryMenu')" 
+            class="w-full flex items-center justify-between gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent transition-colors">
+            <div class="flex items-center gap-4">
                 <span class="material-symbols-outlined text-2xl">inventory_2</span>
-                <span class="font-medium">إدارة المخزون</span>
-              </div>
-              <span class="material-symbols-outlined transition-transform" id="arrow-inventoryMenu">expand_more</span>
-            </button>
-            <div id="inventoryMenu" class="submenu mt-2 pl-8 space-y-1">
-              <a href="#" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
-                <span class="material-symbols-outlined text-sm">chevron_right</span> المخزون
-              </a>
-              <a href="#" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
-                <span class="material-symbols-outlined text-sm">chevron_right</span> إرسال كميات
-              </a>
-              <a href="#" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
-                <span class="material-symbols-outlined text-sm">chevron_right</span> نقاط البيع
-              </a>
+                <span class="font-medium">{{ __('messages.inventory_management') }}</span>
             </div>
-          </div>
+            <span class="material-symbols-outlined transition-transform" id="arrow-inventoryMenu">expand_more</span>
+        </button>
 
-          <!-- Boutiques (collapsible) -->
-          <div>
-            <button onclick="toggleSubmenu('boutiquesMenu')" class="w-full flex items-center justify-between gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent transition-colors">
-              <div class="flex items-center gap-4">
+        <div id="inventoryMenu" class="submenu mt-2 pl-8 space-y-1">
+            <a href="#" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ __('messages.inventory') }}
+            </a>
+
+            <a href="#" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ __('messages.send_quantities') }}
+            </a>
+
+            <a href="#" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ __('messages.pos_points') }}
+            </a>
+        </div>
+    </div>
+
+    <!-- Boutiques -->
+    <div>
+        <button onclick="toggleSubmenu('boutiquesMenu')" 
+            class="w-full flex items-center justify-between gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent transition-colors">
+            <div class="flex items-center gap-4">
                 <span class="material-symbols-outlined text-2xl">storefront</span>
-                <span class="font-medium">إدارة البوتيكات</span>
-              </div>
-              <span class="material-symbols-outlined transition-transform" id="arrow-boutiquesMenu">expand_more</span>
-            </button>
-            <div id="boutiquesMenu" class="submenu mt-2 pl-8 space-y-1">
-              <a href="#" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
-                <span class="material-symbols-outlined text-sm">chevron_right</span> قائمة البوتيكات
-              </a>
-              <a href="#" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
-                <span class="material-symbols-outlined text-sm">chevron_right</span> الأقسام الفرعية
-              </a>
+                <span class="font-medium">{{ __('messages.boutique_management') }}</span>
             </div>
-          </div>
+            <span class="material-symbols-outlined transition-transform" id="arrow-boutiquesMenu">expand_more</span>
+        </button>
 
-          <!-- Tailor Orders (collapsible) -->
-          <div>
-            <button onclick="toggleSubmenu('tailorMenu')" class="w-full flex items-center justify-between gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent transition-colors">
-              <div class="flex items-center gap-4">
+        <div id="boutiquesMenu" class="submenu mt-2 pl-8 space-y-1">
+            <a href="{{url('boutique')}}" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ __('messages.boutique_list') }}
+            </a>
+
+            <a href="#" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ __('messages.sub_categories') }}
+            </a>
+        </div>
+    </div>
+
+    <!-- Tailor Orders -->
+    <div>
+        <button onclick="toggleSubmenu('tailorMenu')" 
+            class="w-full flex items-center justify-between gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent transition-colors">
+            <div class="flex items-center gap-4">
                 <span class="material-symbols-outlined text-2xl">cut</span>
-                <span class="font-medium">طلبات التفصيل</span>
-              </div>
-              <span class="material-symbols-outlined transition-transform" id="arrow-tailorMenu">expand_more</span>
-            </button>
-            <div id="tailorMenu" class="submenu mt-2 pl-8 space-y-1">
-              <a href="#" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
-                <span class="material-symbols-outlined text-sm">chevron_right</span> قائمة الطلبات
-              </a>
-              <a href="#" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
-                <span class="material-symbols-outlined text-sm">chevron_right</span> الخياطين
-              </a>
+                <span class="font-medium">{{ __('messages.tailor_orders') }}</span>
             </div>
-          </div>
+            <span class="material-symbols-outlined transition-transform" id="arrow-tailorMenu">expand_more</span>
+        </button>
 
-          <!-- Other main links -->
-          <a href="#" class="flex items-center gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent">
-            <span class="material-symbols-outlined text-2xl">point_of_sale</span> نقطة البيع
-          </a>
-          <a href="#" class="flex items-center gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent">
-            <span class="material-symbols-outlined text-2xl">assignment_return</span> المرتجعات
-          </a>
-          <a href="#" class="flex items-center gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent">
-            <span class="material-symbols-outlined text-2xl">receipt_long</span> المصروفات
-          </a>
-          <a href="#" class="flex items-center gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent">
-            <span class="material-symbols-outlined text-2xl">group</span> المستخدمين
-          </a>
-          <a href="#" class="flex items-center gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent">
-            <span class="material-symbols-outlined text-2xl">assessment</span> التقارير
-          </a>
-        </nav>
+        <div id="tailorMenu" class="submenu mt-2 pl-8 space-y-1">
+            <a href="#" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ __('messages.order_list') }}
+            </a>
+
+            <a href="#" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ __('messages.tailors') }}
+            </a>
+        </div>
+    </div>
+
+    <!-- Other main links -->
+    <a href="#" class="flex items-center gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent">
+        <span class="material-symbols-outlined text-2xl">point_of_sale</span> 
+        {{ __('messages.pos') }}
+    </a>
+
+    <a href="#" class="flex items-center gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent">
+        <span class="material-symbols-outlined text-2xl">assignment_return</span> 
+        {{ __('messages.returns') }}
+    </a>
+
+    <a href="#" class="flex items-center gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent">
+        <span class="material-symbols-outlined text-2xl">receipt_long</span> 
+        {{ __('messages.expenses') }}
+    </a>
+
+    <a href="#" class="flex items-center gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent">
+        <span class="material-symbols-outlined text-2xl">group</span> 
+        {{ __('messages.users') }}
+    </a>
+
+    <a href="#" class="flex items-center gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent">
+        <span class="material-symbols-outlined text-2xl">assessment</span> 
+        {{ __('messages.reports') }}
+    </a>
+
+</nav>
+
 
         <!-- Sidebar Profile -->
         <div class="p-4 border-t border-gray-200 dark:border-gray-800">

@@ -252,5 +252,25 @@ return [
     'pull_reason_placeholder' => 'مثلاً: تلف، خطأ في الإدخال السابق...',
     'cancel' => 'إلغاء',
     'save_action' => 'حفظ العملية',
+     'dashboard' => 'الرئيسية',
+
+    'inventory_management' => 'إدارة المخزون',
+    'inventory' => 'المخزون',
+    'send_quantities' => 'إرسال كميات',
+    'pos_points' => 'نقاط البيع',
+
+    'boutique_management' => 'إدارة البوتيكات',
+    'boutique_list' => 'قائمة البوتيكات',
+    'sub_categories' => 'الأقسام الفرعية',
+
+    'tailor_orders' => 'طلبات التفصيل',
+    'order_list' => 'قائمة الطلبات',
+    'tailors' => 'الخياطين',
+
+    'pos' => 'نقطة البيع',
+    'returns' => 'المرتجعات',
+    'expenses' => 'المصروفات',
+    'users' => 'المستخدمين',
+    'reports' => 'التقارير',
 
 ];
