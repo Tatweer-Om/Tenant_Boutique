@@ -6,14 +6,20 @@ use Carbon\Carbon;
 use App\Models\User;
 use App\Models\Stock;
 use App\Models\SpecialOrder;
+use App\Models\SpecialOrderItem;
+use App\Models\Customer;
+use App\Models\Tailor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class SpecialOrderController extends Controller
 {
        public function index(){
 
-    return view ('specialorder.specialorder');
+$stock = Stock::select('id', 'abaya_code as code', 'design_name as name', 'sales_price')->get();
+
+    return view ('special_orders.special_order', compact('stock'));
 
     }
 
@@ -89,38 +95,122 @@ class SpecialOrderController extends Controller
 
  public function add_specialorder(Request $request)
 {
+    try {
+        DB::beginTransaction();
+
     $user_id = Auth::id();
     $user = User::find($user_id);
-    $user_name = $user->user_name;
+        $user_name = $user->user_name ?? 'System';
 
-    // Create master order
-    $specialorder = new SpecialOrder();
-    $specialorder->source = $request['source'];
-    $specialorder->customer_name = $request['name'];
-    $specialorder->contact = $request['contact'];
-    $specialorder->city = $request['city'];
-    $specialorder->area = $request['area'];
-    $specialorder->send_as_gift = $request['send_as_gift'] ?? 0;
-    $specialorder->gift_text = $request['gift_text'] ?? null;
-    $specialorder->notes = $request['notes'] ?? null;
-    $specialorder->added_by = $user_name;
-    $specialorder->user_id = $user_id;
-    $specialorder->save();
+        // Log the incoming request for debugging
+        \Log::info('Special Order Request:', [
+            'customer' => $request->input('customer'),
+            'orders_count' => count($request->input('orders', [])),
+            'orders' => $request->input('orders'),
+        ]);
 
-    // Save multiple dresses
-    foreach ($request->items as $item) {
-        $specialorder_item = new Stock();
-        $specialorder_item->special_order_id = $specialorder->id;
-        $specialorder_item->item_name = $item['item_name'];
-        $specialorder_item->abaya_length = $item['abaya_length'] ?? null;
-        $specialorder_item->bust = $item['bust'] ?? null;
-        $specialorder_item->sleeves_length = $item['sleeves_length'] ?? null;
-        $specialorder_item->buttons = $item['buttons'] ?? 0;
-        $specialorder_item->notes = $item['notes'] ?? null;
-        $specialorder_item->save();
+        // Validate required fields
+        $request->validate([
+            'customer.name' => 'required|string|max:255',
+            'customer.phone' => 'nullable|string|max:20',
+            'customer.source' => 'required|string|in:whatsapp,walkin',
+            'orders' => 'required|array|min:1',
+            'orders.*.stock_id' => 'nullable|exists:stocks,id',
+            'orders.*.quantity' => 'required|integer|min:1',
+            'orders.*.price' => 'required|numeric|min:0',
+        ]);
+
+        // Create or find customer
+        $phone = $request->input('customer.phone');
+        
+        if (!empty($phone)) {
+            // If phone exists, find or create by phone
+            $customer = Customer::firstOrCreate(
+                ['phone' => $phone],
+                [
+                    'name' => $request->input('customer.name'),
+                    'governorate' => $request->input('customer.governorate'),
+                    'area' => $request->input('customer.area'),
+                ]
+            );
+
+            // Update customer if phone exists but name/governorate/area changed
+            if ($customer->wasRecentlyCreated === false) {
+                $customer->name = $request->input('customer.name');
+                $customer->governorate = $request->input('customer.governorate');
+                $customer->area = $request->input('customer.area');
+                $customer->save();
+            }
+        } else {
+            // If no phone, create new customer
+            $customer = new Customer();
+            $customer->name = $request->input('customer.name');
+            $customer->phone = null;
+            $customer->governorate = $request->input('customer.governorate');
+            $customer->area = $request->input('customer.area');
+            $customer->save();
+        }
+
+        // Calculate total amount
+        $totalAmount = $request->input('shipping_fee', 0);
+        foreach ($request->input('orders', []) as $orderData) {
+            $totalAmount += ($orderData['price'] ?? 0) * ($orderData['quantity'] ?? 1);
+        }
+
+        // Create special order
+        $specialOrder = new SpecialOrder();
+        $specialOrder->source = $request->input('customer.source');
+        $specialOrder->customer_id = $customer->id;
+        $specialOrder->send_as_gift = $request->input('customer.is_gift') === 'yes' ? true : false;
+        $specialOrder->gift_text = $request->input('customer.gift_message');
+        $specialOrder->shipping_fee = $request->input('shipping_fee', 0);
+        $specialOrder->total_amount = $totalAmount;
+        $specialOrder->paid_amount = 0;
+        $specialOrder->status = 'new';
+        $specialOrder->notes = $request->input('notes');
+        $specialOrder->user_id = 1;
+        $specialOrder->added_by = 'system_add';
+        $specialOrder->save();
+
+        // Save order items
+        foreach ($request->input('orders', []) as $orderData) {
+            $item = new SpecialOrderItem();
+            $item->special_order_id = $specialOrder->id;
+            $item->stock_id = $orderData['stock_id'] ?? null;
+            $item->abaya_code = $orderData['abaya_code'] ?? null;
+            $item->design_name = $orderData['design_name'] ?? null;
+            $item->quantity = $orderData['quantity'] ?? 1;
+            $item->price = $orderData['price'] ?? 0;
+            $item->abaya_length = $orderData['length'] ?? null;
+            $item->bust = $orderData['bust'] ?? null;
+            $item->sleeves_length = $orderData['sleeves'] ?? null;
+            $item->buttons = ($orderData['buttons'] ?? 'yes') === 'yes' ? true : false;
+            $item->notes = $orderData['notes'] ?? null;
+            $item->save();
+        }
+
+        DB::commit();
+
+        return response()->json([
+            'success' => true,
+            'message' => trans('messages.order_saved_successfully', [], session('locale')),
+            'special_order_id' => $specialOrder->id
+        ]);
+
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        DB::rollBack();
+        return response()->json([
+            'success' => false,
+            'message' => 'Validation failed',
+            'errors' => $e->errors()
+        ], 422);
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return response()->json([
+            'success' => false,
+            'message' => 'Error saving order: ' . $e->getMessage()
+        ], 500);
     }
-
-    return response()->json(['specialorder_id' => $specialorder->id]);
 }
 
 
@@ -170,8 +260,8 @@ public function update_specialorder(Request $request)
     $specialorder->send_as_gift = $request['send_as_gift'] ?? 0;
     $specialorder->gift_text = $request['gift_text'] ?? null;
     $specialorder->notes = $request['notes'] ?? null;
-    $specialorder->added_by = $user_name;
-    $specialorder->user_id = $user_id;
+    $specialorder->added_by = 'system_update';
+    $specialorder->user_id =  1;
     $specialorder->save();
 
     // Delete old items and insert new ones
@@ -214,6 +304,411 @@ public function delete_specialorder(Request $request)
     $specialorder->delete();
 
     return response()->json(['message' => 'Special order deleted successfully']);
+}
+
+
+public function searchAbayas(Request $request)
+{
+    $search = $request->input('search', '');
+    
+    $query = Stock::with(['images']);
+    
+    if (!empty($search)) {
+        $query->where(function($q) use ($search) {
+            $q->where('abaya_code', 'LIKE', '%' . $search . '%')
+              ->orWhere('design_name', 'LIKE', '%' . $search . '%')
+              ->orWhere('barcode', 'LIKE', '%' . $search . '%');
+        });
+    }
+    
+    $stocks = $query->limit(20)->get();
+    
+    $abayas = $stocks->map(function($stock) {
+        return [
+            'id' => $stock->id,
+            'code' => $stock->abaya_code,
+            'name' => $stock->design_name ?? $stock->abaya_code,
+            'price' => $stock->sales_price ?? 0,
+            'image' => $stock->images->first() ? $stock->images->first()->image_path : '/images/placeholder.png'
+        ];
+    });
+    
+    return response()->json($abayas);
+}
+
+public function view_special_order()
+{
+    return view('special_orders.view_special_order');
+}
+
+public function getOrdersList(Request $request)
+{
+    try {
+        $orders = SpecialOrder::with(['customer', 'items.stock.images'])
+            ->orderBy('created_at', 'DESC')
+            ->get();
+
+        $formattedOrders = $orders->map(function($order) {
+            // Get first item image or placeholder
+            $firstItem = $order->items->first();
+            $image = '/images/placeholder.png';
+            if ($firstItem && $firstItem->stock && $firstItem->stock->images->first()) {
+                $image = $firstItem->stock->images->first()->image_path;
+            }
+
+            // Get first item details for modal
+            $firstItemData = $firstItem ? [
+                'length' => $firstItem->abaya_length,
+                'bust' => $firstItem->bust,
+                'sleeves' => $firstItem->sleeves_length,
+                'buttons' => $firstItem->buttons,
+            ] : [
+                'length' => null,
+                'bust' => null,
+                'sleeves' => null,
+                'buttons' => false,
+            ];
+
+            // Get tailor info (if available from items notes or order notes)
+            $tailor = 'N/A';
+            if ($firstItem && $firstItem->notes) {
+                $tailor = $firstItem->notes;
+            } elseif ($order->notes) {
+                $tailor = $order->notes;
+            }
+
+            return [
+                'id' => $order->id,
+                'customer' => $order->customer->name ?? 'N/A',
+                'date' => $order->created_at->format('Y-m-d'),
+                'status' => $order->status ?? 'new',
+                'source' => $order->source,
+                'total' => floatval($order->total_amount ?? 0),
+                'paid' => floatval($order->paid_amount ?? 0),
+                'image' => $image,
+                'length' => $firstItemData['length'],
+                'bust' => $firstItemData['bust'],
+                'sleeves' => $firstItemData['sleeves'],
+                'buttons' => $firstItemData['buttons'],
+                'tailor' => $tailor,
+                'notes' => $order->notes ?? '',
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'orders' => $formattedOrders
+        ]);
+    } catch (\Exception $e) {
+        \Log::error('Error in getOrdersList: ' . $e->getMessage());
+        \Log::error('Stack trace: ' . $e->getTraceAsString());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error fetching orders: ' . $e->getMessage(),
+            'orders' => []
+        ], 500);
+    }
+}
+
+public function recordPayment(Request $request)
+{
+    try {
+        $orderId = $request->input('order_id');
+        $amount = $request->input('amount');
+        $paymentMethod = $request->input('payment_method', 'cash');
+
+        $order = SpecialOrder::findOrFail($orderId);
+        
+        $newPaidAmount = $order->paid_amount + $amount;
+        
+        // Validate amount doesn't exceed total
+        if ($newPaidAmount > $order->total_amount + 0.001) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment amount exceeds total amount'
+            ], 422);
+        }
+
+        $order->paid_amount = $newPaidAmount;
+        
+        // If fully paid and not delivered, set status to ready
+        if (abs($order->total_amount - $newPaidAmount) < 0.001 && $order->status !== 'delivered') {
+            $order->status = 'ready';
+        }
+        
+        $order->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Payment recorded successfully',
+            'order' => [
+                'id' => $order->id,
+                'paid' => floatval($order->paid_amount),
+                'status' => $order->status
+            ]
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error recording payment: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+public function updateDeliveryStatus(Request $request)
+{
+    try {
+        $orderIds = $request->input('order_ids', []);
+        
+        if (empty($orderIds)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No orders selected'
+            ], 422);
+        }
+
+        $updated = SpecialOrder::whereIn('id', $orderIds)
+            ->where('status', 'ready')
+            ->update(['status' => 'delivered']);
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$updated} order(s) marked as delivered",
+            'updated_count' => $updated
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error updating delivery status: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+public function deleteOrder(Request $request)
+{
+    try {
+        $orderId = $request->input('order_id');
+        
+        $order = SpecialOrder::findOrFail($orderId);
+        
+        // Delete related items first
+        $order->items()->delete();
+        
+        // Delete the order
+        $order->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Order deleted successfully'
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error deleting order: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+
+public function send_request()
+{
+    return view('special_orders.send_request');
+}
+
+public function getTailorAssignmentsData(Request $request)
+{
+    try {
+        // Get all tailors
+        $tailors = Tailor::select('id', 'tailor_name as name')->get();
+
+        // Get new items (not yet assigned to tailor)
+        $newItems = SpecialOrderItem::with(['specialOrder.customer', 'stock.images'])
+            ->where(function($query) {
+                $query->whereNull('tailor_id')
+                      ->orWhere('tailor_status', 'new');
+            })
+            ->get()
+            ->map(function($item) {
+                $order = $item->specialOrder;
+                $stock = $item->stock;
+                $image = optional(optional($stock)->images->first())->image_path ?? '/images/placeholder.png';
+                
+                if ($stock && $stock->images->first()) {
+                    $image = $stock->images->first()->image_path;
+                }
+
+                // Get original tailor from stock if exists
+                $originalTailor = '';
+                if ($stock && $stock->tailor_id) {
+                    $tailor = Tailor::find($stock->tailor_id);
+                    $originalTailor = $tailor ? $tailor->tailor_name : '';
+                }
+
+                return [
+                    'rowId' => $item->id,
+                    'orderId' => $order->id ?? 0,
+                    'source' => $order->source ?? '',
+                    'customer' => $order->customer->name ?? 'N/A',
+                    'code' => $item->abaya_code ?? '',
+                    'abayaName' => $item->design_name ?? $item->abaya_code ?? 'N/A',
+                    'image' => $image,
+                    'length' => $item->abaya_length,
+                    'bust' => $item->bust,
+                    'sleeves' => $item->sleeves_length,
+                    'buttons' => $item->buttons ?? true,
+                    'notes' => $item->notes ?? '',
+                    'date' => $order->created_at->format('Y-m-d'),
+                    'originalTailor' => $originalTailor,
+                    'tailor_id' => null,
+                    'tailor' => '',
+                    'status' => 'new',
+                ];
+            });
+
+        // Get processing items (assigned to tailor but not received)
+        $processingItems = SpecialOrderItem::with(['specialOrder.customer', 'stock.images', 'tailor'])
+            ->where('tailor_status', 'processing')
+            ->get()
+            ->map(function($item) {
+                $order = $item->specialOrder;
+                $stock = $item->stock;
+                $image = '/images/placeholder.png';
+                
+                if ($stock && $stock->images->first()) {
+                    $image = $stock->images->first()->image_path;
+                }
+
+                // Get original tailor from stock if exists
+                $originalTailor = '';
+                if ($stock && $stock->tailor_id) {
+                    $tailor = Tailor::find($stock->tailor_id);
+                    $originalTailor = $tailor ? $tailor->tailor_name : '';
+                }
+
+                return [
+                    'rowId' => $item->id,
+                    'orderId' => $order->id ?? 0,
+                    'source' => $order->source ?? '',
+                    'customer' => $order->customer->name ?? 'N/A',
+                    'code' => $item->abaya_code ?? '',
+                    'abayaName' => $item->design_name ?? $item->abaya_code ?? 'N/A',
+                    'image' => $image,
+                    'length' => $item->abaya_length,
+                    'bust' => $item->bust,
+                    'sleeves' => $item->sleeves_length,
+                    'buttons' => $item->buttons ?? true,
+                    'notes' => $item->notes ?? '',
+                   'date' => $item->sent_to_tailor_at
+    ? \Carbon\Carbon::parse($item->sent_to_tailor_at)->format('Y-m-d')
+    : \Carbon\Carbon::parse($order->created_at)->format('Y-m-d'),
+                    'originalTailor' => $originalTailor,
+                    'tailor_id' => $item->tailor_id,
+                    'tailor' => $item->tailor ? $item->tailor->tailor_name : '',
+                    'tailor_name' => $item->tailor ? $item->tailor->tailor_name : '',
+                    'status' => 'processing',
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'tailors' => $tailors,
+            'new' => $newItems,
+            'processing' => $processingItems,
+        ]);
+    } catch (\Exception $e) {
+        \Log::error('Error in getTailorAssignmentsData: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error fetching data: ' . $e->getMessage(),
+            'tailors' => [],
+            'new' => [],
+            'processing' => [],
+        ], 500);
+    }
+}
+
+public function assignItemsToTailor(Request $request)
+{
+    try {
+        $assignments = $request->input('assignments', []);
+
+        if (empty($assignments)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No items selected'
+            ], 422);
+        }
+
+        DB::beginTransaction();
+
+        foreach ($assignments as $assignment) {
+            $itemId = $assignment['item_id'] ?? null;
+            $tailorId = $assignment['tailor_id'] ?? null;
+
+            if (!$itemId || !$tailorId) {
+                continue;
+            }
+
+            $item = SpecialOrderItem::find($itemId);
+            if ($item) {
+                $item->tailor_id = $tailorId;
+                $item->tailor_status = 'processing';
+                $item->sent_to_tailor_at = now();
+                $item->save();
+            }
+        }
+
+        DB::commit();
+
+        return response()->json([
+            'success' => true,
+            'message' => count($assignments) . ' item(s) assigned to tailor successfully'
+        ]);
+    } catch (\Exception $e) {
+        DB::rollBack();
+        \Log::error('Error in assignItemsToTailor: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error assigning items: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+public function markTailorItemsReceived(Request $request)
+{
+    try {
+        $itemIds = $request->input('item_ids', []);
+
+        if (empty($itemIds)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No items selected'
+            ], 422);
+        }
+
+        DB::beginTransaction();
+
+        $updated = SpecialOrderItem::whereIn('id', $itemIds)
+            ->where('tailor_status', 'processing')
+            ->update([
+                'tailor_status' => 'received',
+                'received_from_tailor_at' => now()
+            ]);
+
+        DB::commit();
+
+        return response()->json([
+            'success' => true,
+            'message' => $updated . ' item(s) marked as received successfully'
+        ]);
+    } catch (\Exception $e) {
+        DB::rollBack();
+        \Log::error('Error in markTailorItemsReceived: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error marking items as received: ' . $e->getMessage()
+        ], 500);
+    }
 }
 
 }

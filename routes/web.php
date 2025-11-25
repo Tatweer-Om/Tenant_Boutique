@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\SizeController;
+use App\Http\Controllers\UserController;
 use App\Http\Controllers\ColorController;
 use App\Http\Controllers\StockController;
 use App\Http\Controllers\BranchController;
@@ -47,6 +48,14 @@ Route::delete('tailors/{tailor}', [TailorController::class, 'destroy']);
 Route::get('tailors/list', [TailorController::class, 'gettailors']);
 Route::get('tailors/{tailor}', [TailorController::class, 'show']);
 
+
+Route::get('user', [UserController::class, 'index'])->name('user');
+Route::post('users', [UserController::class, 'store']);
+Route::put('users/{user}', [UserController::class, 'update']);
+Route::delete('users/{user}', [UserController::class, 'destroy']);
+Route::get('users/list', [UserController::class, 'getusers']);
+Route::get('users/{user}', [UserController::class, 'show']);
+
 Route::get('colors', [ColorController::class, 'index']);
 Route::post('colors', [ColorController::class, 'store']);
 Route::put('colors/{color}', [ColorController::class, 'update']);
@@ -63,6 +72,12 @@ Route::post('edit_size', [SizeController::class, 'edit_size'])->name('edit_size'
 Route::post('update_size', [SizeController::class, 'update_size'])->name('update_size');
 Route::post('delete_size', [SizeController::class, 'delete_size'])->name('delete_size');
 
+// Route::get('user', [UserController::class, 'index'])->name('user');
+// Route::post('add_user', [UserController::class, 'add_user'])->name('add_user');
+// Route::get('show_user', [UserController::class, 'show_user'])->name('show_user');
+// Route::post('edit_user', [UserController::class, 'edit_user'])->name('edit_user');
+// Route::post('update_user', [UserController::class, 'update_user'])->name('update_user');
+// Route::post('delete_user', [UserController::class, 'delete_user'])->name('delete_user');
 
 Route::get('tailor', [TailorController::class, 'index'])->name('tailor');
 Route::post('add_tailor', [TailorController::class, 'add_tailor'])->name('add_tailor');
@@ -117,13 +132,22 @@ Route::post('edit_branch', [BranchController::class, 'edit_branch'])->name('edit
 Route::post('update_branch', [BranchController::class, 'update_branch'])->name('update_branch');
 Route::post('delete_branch', [BranchController::class, 'delete_branch'])->name('delete_branch');
 
+Route::get('send_request', [SpecialOrderController::class, 'send_request'])->name('send_request');
+Route::get('send_request/data', [SpecialOrderController::class, 'getTailorAssignmentsData'])->name('send_request.data');
+Route::post('send_request/assign', [SpecialOrderController::class, 'assignItemsToTailor'])->name('send_request.assign');
+Route::post('send_request/receive', [SpecialOrderController::class, 'markTailorItemsReceived'])->name('send_request.receive');
 
 Route::get('spcialorder', [SpecialOrderController::class, 'index'])->name('spcialorder');
-Route::post('add_spcialorder', [SpecialOrderController::class, 'add_spcialorder'])->name('add_spcialorder');
-Route::get('show_spcialorder', [SpecialOrderController::class, 'show_spcialorder'])->name('show_spcialorder');
+Route::post('add_spcialorder', [SpecialOrderController::class, 'add_specialorder'])->name('add_spcialorder');
+Route::get('view_special_order', [SpecialOrderController::class, 'view_special_order'])->name('view_special_order');
+Route::get('get_orders_list', [SpecialOrderController::class, 'getOrdersList'])->name('get_orders_list');
+Route::post('record_payment', [SpecialOrderController::class, 'recordPayment'])->name('record_payment');
+Route::post('update_delivery_status', [SpecialOrderController::class, 'updateDeliveryStatus'])->name('update_delivery_status');
+Route::post('delete_order', [SpecialOrderController::class, 'deleteOrder'])->name('delete_order');
 Route::post('edit_spcialorder', [SpecialOrderController::class, 'edit_spcialorder'])->name('edit_spcialorder');
 Route::post('update_spcialorder', [SpecialOrderController::class, 'update_spcialorder'])->name('update_spcialorder');
 Route::post('delete_spcialorder', [SpecialOrderController::class, 'delete_spcialorder'])->name('delete_spcialorder');
+Route::get('search_abayas', [SpecialOrderController::class, 'searchAbayas'])->name('search_abayas');
 
 Route::get('wharehouse', [WharehouseController::class, 'index'])->name('wharehouse');
 Route::post('add_wharehouse', [WharehouseController::class, 'add_wharehouse'])->name('add_wharehouse');

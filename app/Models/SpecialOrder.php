@@ -3,8 +3,46 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SpecialOrder extends Model
 {
-    //
+    protected $fillable = [
+        'source',
+        'customer_id',
+        'send_as_gift',
+        'gift_text',
+        'notes',
+        'shipping_fee',
+        'status',
+        'total_amount',
+        'paid_amount',
+        'user_id',
+        'added_by',
+        'updated_by',
+    ];
+
+    protected $casts = [
+        'send_as_gift' => 'boolean',
+        'shipping_fee' => 'decimal:3',
+        'total_amount' => 'decimal:3',
+        'paid_amount' => 'decimal:3',
+    ];
+
+    /**
+     * Get the customer that owns the special order
+     */
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
+    }
+
+    /**
+     * Get all items for this special order
+     */
+    public function items(): HasMany
+    {
+        return $this->hasMany(SpecialOrderItem::class);
+    }
 }
