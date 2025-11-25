@@ -98,6 +98,34 @@
         </div>
     </div>
 
+     <div>
+        <button onclick="toggleSubmenu('stock_menue')" 
+            class="w-full flex items-center justify-between gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent transition-colors">
+            <div class="flex items-center gap-4">
+                <span class="material-symbols-outlined text-2xl">inventory_2</span>
+                <span class="font-medium">{{ __('messages.view_stock_lang') }}</span>
+            </div>
+            <span class="material-symbols-outlined transition-transform" id="arrow-inventoryMenu">expand_more</span>
+        </button>
+
+        <div id="stock_menue" class="submenu mt-2 pl-8 space-y-1">
+            <a href="{{url('stock')}}" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ __('messages.add_stock_lang') }}
+            </a>
+
+            <a href="{{url('view_stock')}}" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ __('messages.view_stock_lang') }}
+            </a>
+              <a href="{{url('view_material')}}" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ __('messages.view_material_lang') }}
+            </a>
+
+         
+        </div>
+    </div>
     <!-- Boutiques -->
     <div>
         <button onclick="toggleSubmenu('boutiquesMenu')" 
@@ -139,7 +167,7 @@
                 {{ __('messages.order_list') }}
             </a>
 
-            <a href="#" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
+            <a href="{{url('tailor')}}" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
                 {{ __('messages.tailors') }}
             </a>
@@ -162,7 +190,7 @@
         {{ __('messages.expenses') }}
     </a>
 
-    <a href="#" class="flex items-center gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent">
+    <a href="{{url('user')}}" class="flex items-center gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent">
         <span class="material-symbols-outlined text-2xl">group</span> 
         {{ __('messages.users') }}
     </a>

@@ -13,21 +13,17 @@ return new class extends Migration
     {
         Schema::create('special_orders', function (Blueprint $table) {
             $table->id();
-      
             $table->string('source'); // WhatsApp, Walk in
-            $table->string('customer_id'); // name
-            $table->string('contact'); // contact
-            $table->string('city'); // city
-            $table->string('area'); // area
+            $table->integer('customer_id'); // Foreign key to customers
             $table->boolean('send_as_gift')->default(false); // yes/no
             $table->longText('gift_text')->nullable(); // gift text if any
             $table->longText('notes')->nullable(); // general notes
-            $table->string('user_id');
+            $table->decimal('shipping_fee', 10, 3)->default(0);
+            $table->integer('user_id');
             $table->string('added_by');
             $table->string('updated_by')->nullable(); 
             $table->timestamps();
 
-           
         });
     }
 

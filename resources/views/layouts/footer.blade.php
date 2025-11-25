@@ -24,9 +24,10 @@
          @include('custom_js.color_js')
           @elseif ($route_name == 'tailor')
          @include('custom_js.tailor_js')
-            @elseif ($route_name == 'boutique')
+            @elseif ($route_name == 'user')
+         @include('custom_js.user_js')
+   @elseif ($route_name == 'boutique')
          @include('custom_js.boutique_js')
-
   @elseif ($route_name == 'boutique_list')
          @include('custom_js.boutique_list_js')
            @elseif ($route_name == 'edit_boutique')
@@ -41,6 +42,10 @@
          @include('custom_js.material_list_js')
            @elseif ($route_name == 'edit_material')
          @include('custom_js.edit_material_js')
+          @elseif ($route_name == 'spcialorder')
+         @include('custom_js.special_order_js')
+              @elseif ($route_name == 'view_special_order')
+         @include('custom_js.view_orders_js')
     @endif
          
   </body>
