@@ -20,8 +20,8 @@ return new class extends Migration
             $table->string('item_previous_quantity')->nullable();
             $table->string('quantity_action')->nullable();
             $table->string('item_new_quantity')->nullable();
-    $table->integer('quantity_pulled')->default(0);
-    $table->integer('quantity_pushed')->default(0);
+            $table->integer('quantity_pulled')->default(0);
+            $table->integer('quantity_pushed')->default(0);
             $table->string('added_by')->nullable();
             $table->integer('user_id')->nullable();
             $table->timestamps();
