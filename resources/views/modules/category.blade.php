@@ -48,6 +48,9 @@
                             {{ trans('messages.category_name', [], session('locale')) }}
                         </th>
                         <th class="px-4 sm:px-6 py-4 font-semibold text-[var(--text-secondary)]">
+                            {{ trans('messages.category_name_ar', [], session('locale')) }}
+                        </th>
+                        <th class="px-4 sm:px-6 py-4 font-semibold text-[var(--text-secondary)]">
                             {{ trans('messages.notes', [], session('locale')) }}
                         </th>
                         <th class="px-4 sm:px-6 py-4 font-semibold text-[var(--text-secondary)] text-center">
@@ -88,6 +91,16 @@
                         <input type="text"
                             placeholder="{{ trans('messages.category_name_placeholder', [], session('locale')) }}"
                             name="category_name" id="category_name"
+                            class="w-full border rounded-lg p-3 focus:ring focus:ring-[var(--primary-color)]">
+                    </div>
+
+                    <div>
+                        <label class="block text-base font-medium mb-2">
+                            {{ trans('messages.category_name_ar', [], session('locale')) }}
+                        </label>
+                        <input type="text"
+                            placeholder="{{ trans('messages.category_name_ar_placeholder', [], session('locale')) }}"
+                            name="category_name_ar" id="category_name_ar"
                             class="w-full border rounded-lg p-3 focus:ring focus:ring-[var(--primary-color)]">
                     </div>
 

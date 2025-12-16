@@ -25,6 +25,7 @@ class CategoryController extends Controller
         $category = new Category();
         $category->abaya = false; // Default to false
         $category->category_name = $request->category_name;
+        $category->category_name_ar = $request->category_name_ar;
         $category->notes = $request->notes;
         $category->added_by = $user->name ?? 'system';
         $category->user_id = $user->id ?? 1;
@@ -39,6 +40,7 @@ class CategoryController extends Controller
         $user = Auth::user();
 
         $category->category_name = $request->category_name;
+        $category->category_name_ar = $request->category_name_ar;
         $category->notes = $request->notes;
         $category->updated_by = $user->name ?? 'system_update';
         $category->save();
