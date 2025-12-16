@@ -9,6 +9,7 @@ class Category extends Model
     protected $fillable = [
         'abaya',
         'category_name',
+        'category_name_ar',
         'notes',
         'added_by',
         'user_id',

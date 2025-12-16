@@ -14,6 +14,7 @@ use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\WharehouseController;
 use App\Http\Controllers\SpecialOrderController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\PosController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -189,3 +190,5 @@ Route::get('get_boutiques_list', [WharehouseController::class, 'get_boutiques_li
 Route::get('get_stats', [WharehouseController::class, 'get_stats'])->name('get_stats');
 Route::get('settlement', [WharehouseController::class, 'settlement'])->name('settlement');
 
+Route::get('pos', [PosController::class, 'index'])->name('pos');
+Route::get('pos/stock/{id}', [PosController::class, 'getStockDetails'])->name('pos.stock.details');

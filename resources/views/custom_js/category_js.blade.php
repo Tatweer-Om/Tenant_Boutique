@@ -14,6 +14,7 @@
             rows += `
             <tr class="hover:bg-pink-50/50 transition-colors" data-id="${category.id}">
                 <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${category.category_name || '-'}</td>
+                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${category.category_name_ar || '-'}</td>
                 <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${notesPreview}</td>
                 <td class="px-4 sm:px-6 py-5 text-center">
                     <div class="flex items-center justify-center gap-4 sm:gap-6">
@@ -86,6 +87,7 @@ $(document).on('click', '#pagination a', function(e) {
             e.preventDefault();
             let id = $('#category_id').val();
             let category_name = $('#category_name').val().trim();
+            let category_name_ar = $('#category_name_ar').val().trim();
             let notes = $('#notes').val().trim();
 
             // Simple validation
@@ -99,6 +101,7 @@ $(document).on('click', '#pagination a', function(e) {
             // Serialize form data
             let data = {
                 category_name: category_name,
+                category_name_ar: category_name_ar,
                 notes: notes,
                 _token: '{{ csrf_token() }}'
             };
@@ -118,6 +121,7 @@ $(document).on('click', '#pagination a', function(e) {
                     // Reset form
                     $('#category_form')[0].reset();
                     $('#category_id').val('');
+                    $('#category_name_ar').val('');
                     loadCategories();
                     show_notification(
                         'success',
@@ -152,6 +156,7 @@ $(document).on('click', '#pagination a', function(e) {
             $.get("{{ url('categories') }}/" + id, function(category) {
                 $('#category_id').val(category.id);
                 $('#category_name').val(category.category_name);
+                $('#category_name_ar').val(category.category_name_ar || '');
                 $('#notes').val(category.notes);
                 
                 // Open modal using Alpine event
