@@ -75,25 +75,62 @@ class TailorController extends Controller
             ->orderBy('sent_to_tailor_at', 'DESC')
             ->get();
         
-        // Calculate totals
-        $totalSent = $specialOrderItems->whereNotNull('sent_to_tailor_at')->count();
-        $totalReceived = $specialOrderItems->where('tailor_status', 'received')->count();
-        $pending = $specialOrderItems->where('tailor_status', 'processing')->count();
+        // Calculate totals (sum of quantities)
+        $totalSent = $specialOrderItems->whereNotNull('sent_to_tailor_at')->sum('quantity');
+        $totalReceived = $specialOrderItems->where('tailor_status', 'received')->sum('quantity');
+        $pending = $specialOrderItems->where('tailor_status', 'processing')->sum('quantity');
         
         // Format items for display
         $items = $specialOrderItems->map(function($item) {
             $order = $item->specialOrder;
+            $orderDate = $order ? Carbon::parse($order->created_at) : null;
+            $orderNo = $orderDate ? $orderDate->format('Y') . '-' . str_pad($order->id, 4, '0', STR_PAD_LEFT) : '—';
+            
+            $sentDate = $item->sent_to_tailor_at ? Carbon::parse($item->sent_to_tailor_at) : null;
+            $daysLate = $sentDate && $item->is_late_delivery ? $sentDate->diffInDays(Carbon::now()) : 0;
+            
             return [
-                'order_id' => 'SO-' . str_pad($order->id ?? 0, 4, '0', STR_PAD_LEFT),
+                'order_id' => $orderNo,
+                'order_number' => 'SO-' . str_pad($order->id ?? 0, 4, '0', STR_PAD_LEFT),
                 'customer_name' => $order->customer->name ?? 'N/A',
                 'abaya_code' => $item->abaya_code ?? '-',
                 'design_name' => $item->design_name ?? $item->abaya_code ?? '-',
                 'quantity' => $item->quantity ?? 0,
                 'status' => $item->tailor_status === 'received' ? 'received' : ($item->tailor_status === 'processing' ? 'processing' : 'new'),
-                'sent_date' => $item->sent_to_tailor_at ? Carbon::parse($item->sent_to_tailor_at)->format('Y-m-d') : null,
+                'sent_date' => $sentDate ? $sentDate->format('Y-m-d') : null,
                 'received_date' => $item->received_from_tailor_at ? Carbon::parse($item->received_from_tailor_at)->format('Y-m-d') : null,
+                'is_late_delivery' => $item->is_late_delivery ?? false,
+                'days_late' => $daysLate,
+                'marked_late_at' => $item->marked_late_at ? Carbon::parse($item->marked_late_at)->format('Y-m-d H:i') : null,
             ];
         })->toArray();
+        
+        // Get late delivery history
+        $lateDeliveryItems = SpecialOrderItem::with(['specialOrder.customer'])
+            ->where('tailor_id', $id)
+            ->where('is_late_delivery', true)
+            ->orderBy('marked_late_at', 'DESC')
+            ->get()
+            ->map(function($item) {
+                $order = $item->specialOrder;
+                $orderDate = $order ? Carbon::parse($order->created_at) : null;
+                $orderNo = $orderDate ? $orderDate->format('Y') . '-' . str_pad($order->id, 4, '0', STR_PAD_LEFT) : '—';
+                
+                $sentDate = $item->sent_to_tailor_at ? Carbon::parse($item->sent_to_tailor_at) : null;
+                $daysLate = $sentDate ? $sentDate->diffInDays(Carbon::now()) : 0;
+                
+                return [
+                    'order_no' => $orderNo,
+                    'customer_name' => $order->customer->name ?? 'N/A',
+                    'abaya_code' => $item->abaya_code ?? '-',
+                    'design_name' => $item->design_name ?? $item->abaya_code ?? '-',
+                    'quantity' => $item->quantity ?? 0,
+                    'sent_date' => $sentDate ? $sentDate->format('Y-m-d') : null,
+                    'days_late' => $daysLate,
+                    'marked_late_at' => $item->marked_late_at ? Carbon::parse($item->marked_late_at)->format('Y-m-d H:i') : null,
+                    'current_status' => $item->tailor_status,
+                ];
+            })->toArray();
         
         $specialOrdersData = [
             'total_sent' => $totalSent,
@@ -207,7 +244,49 @@ class TailorController extends Controller
             'items' => $items
         ];
 
-        return view('tailors.tailor_profile', compact('tailor', 'specialOrdersData', 'stockReceivedData', 'materialsSentData'));
+        // Get repair history for this tailor
+        $repairItems = SpecialOrderItem::with(['specialOrder.customer'])
+            ->where('maintenance_tailor_id', $id)
+            ->whereIn('maintenance_status', ['delivered_to_tailor', 'received_from_tailor'])
+            ->orderBy('sent_for_repair_at', 'desc')
+            ->get();
+        
+        $totalRepairs = $repairItems->count();
+        $totalDeliveryCharges = $repairItems->sum('maintenance_delivery_charges');
+        $totalRepairCost = $repairItems->sum('maintenance_repair_cost');
+        
+        $repairHistoryItems = $repairItems->map(function($item) {
+            $order = $item->specialOrder;
+            $customer = $order ? $order->customer : null;
+            
+            return [
+                'transfer_number' => $item->maintenance_transfer_number ?? '',
+                'design_name' => $item->design_name ?? 'N/A',
+                'abaya_code' => $item->abaya_code ?? 'N/A',
+                'customer_name' => $customer ? $customer->name : 'N/A',
+                'customer_phone' => $customer ? $customer->phone : 'N/A',
+                'sent_date' => $item->sent_for_repair_at ? Carbon::parse($item->sent_for_repair_at)->format('Y-m-d H:i') : null,
+                'received_date' => $item->repaired_at ? Carbon::parse($item->repaired_at)->format('Y-m-d H:i') : null,
+                'delivery_charges' => $item->maintenance_delivery_charges ?? 0,
+                'repair_cost' => $item->maintenance_repair_cost ?? 0,
+                'cost_bearer' => $item->maintenance_cost_bearer ?? null,
+                'status' => $item->maintenance_status ?? null,
+            ];
+        })->toArray();
+        
+        $repairHistoryData = [
+            'total_repairs' => $totalRepairs,
+            'total_delivery_charges' => $totalDeliveryCharges,
+            'total_repair_cost' => $totalRepairCost,
+            'items' => $repairHistoryItems
+        ];
+        
+        $lateDeliveryHistory = [
+            'total_late' => count($lateDeliveryItems),
+            'items' => $lateDeliveryItems
+        ];
+
+        return view('tailors.tailor_profile', compact('tailor', 'specialOrdersData', 'stockReceivedData', 'materialsSentData', 'repairHistoryData', 'lateDeliveryHistory'));
     }
 
     public function send_material_to_tailor(Request $request)

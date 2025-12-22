@@ -105,7 +105,7 @@
                     timer: 1500,
                     showConfirmButton: false,
                     willClose: () => {
-                        window.location.href = "/";
+                        window.location.href = "{{ route('dashboard') }}";
                     }
                 });
             }

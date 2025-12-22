@@ -197,6 +197,12 @@ document.addEventListener('alpine:init', () => {
         if (data.success) {
           this.showModal = false;
           
+          // Open bill in new window
+          if (data.special_order_id) {
+            const billUrl = '{{ url("special-order-bill") }}/' + data.special_order_id;
+            window.open(billUrl, '_blank');
+          }
+          
           // Show success message
           if (typeof Swal !== 'undefined') {
             Swal.fire({

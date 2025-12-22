@@ -106,4 +106,13 @@ class UserController extends Controller
     ]);
 }
 
+public function logout(Request $request)
+{
+    auth()->logout();
+    $request->session()->invalidate();
+    $request->session()->regenerateToken();
+    
+    return redirect()->route('login_page')->with('success', 'تم تسجيل الخروج بنجاح');
+}
+
 }

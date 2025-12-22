@@ -13,11 +13,18 @@
     <h2 class="text-2xl sm:text-3xl font-bold text-gray-900">
         {{ trans('messages.add_new_boutique', [], session('locale')) }}
     </h2>
-    <a href=""
-       class="inline-flex items-center justify-center h-11 px-5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold transition">
-        <span class="material-symbols-outlined text-base me-1">arrow_back</span>
-        {{ trans('messages.back_to_list', [], session('locale')) }}
-    </a>
+    <div class="flex items-center gap-3">
+        <a href="{{url('boutique_list')}}"
+           class="inline-flex items-center justify-center h-11 px-5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold transition">
+            <span class="material-symbols-outlined text-base me-1">arrow_back</span>
+            {{ trans('messages.back_to_list', [], session('locale')) }}
+        </a>
+        <a href="{{url('boutique_list')}}"
+           class="inline-flex items-center justify-center h-11 px-5 rounded-lg bg-[var(--primary-color)] hover:opacity-90 text-white font-semibold transition">
+            <span class="material-symbols-outlined text-base me-1">list</span>
+            {{ trans('messages.boutique_list', [], session('locale')) }}
+        </a>
+    </div>
 </div>
 
     <!-- النموذج -->

@@ -354,7 +354,8 @@ document.addEventListener('alpine:init', () => {
       let result = {};
       this.selectedItems.forEach(i => {
         const tailorName = this.tailorNameById(i.tailor_id) || '{{ trans('messages.not_assigned', [], session('locale')) }}';
-        result[tailorName] = (result[tailorName] || 0) + 1;
+        const quantity = i.quantity || 1;
+        result[tailorName] = (result[tailorName] || 0) + quantity;
       });
       return result;
     },

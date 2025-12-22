@@ -710,6 +710,80 @@ public function get_transfer_history(Request $request)
 }
 
 /**
+ * Movements Log Page with Pagination
+ */
+public function movements_log(Request $request)
+{
+    $locale = session('locale');
+    $search = $request->input('search', '');
+    $dateFrom = $request->input('date_from');
+    $dateTo = $request->input('date_to');
+    $perPage = 10;
+
+    $query = Transfer::with('items')->orderBy('date', 'desc')->orderBy('id', 'desc');
+
+    if ($search) {
+        $query->where('transfer_code', 'like', '%' . $search . '%');
+    }
+
+    if ($dateFrom) {
+        $query->where('date', '>=', $dateFrom);
+    }
+
+    if ($dateTo) {
+        $query->where('date', '<=', $dateTo);
+    }
+
+    $transfers = $query->paginate($perPage)->appends($request->query());
+
+    // Helper function to get channel/boutique name
+    $getLocationName = function($locationId) use ($locale) {
+        if ($locationId === 'main') {
+            return trans('messages.main_warehouse', [], $locale);
+        }
+        
+        if (strpos($locationId, 'boutique-') === 0) {
+            $id = (int)explode('-', $locationId)[1];
+            $boutique = Boutique::find($id);
+            return $boutique ? $boutique->boutique_name : $locationId;
+        }
+        
+        if (strpos($locationId, 'channel-') === 0) {
+            $id = (int)explode('-', $locationId)[1];
+            $channel = Channel::find($id);
+            if ($channel) {
+                return $locale == 'ar' ? $channel->channel_name_ar : $channel->channel_name_en;
+            }
+        }
+        
+        return $locationId;
+    };
+
+    // Transform transfers for display
+    $transfers->getCollection()->transform(function ($transfer) use ($getLocationName) {
+        return [
+            'id' => $transfer->id,
+            'no' => $transfer->transfer_code,
+            'date' => $transfer->date->format('Y-m-d'),
+            'from' => $getLocationName($transfer->from),
+            'to' => $getLocationName($transfer->to),
+            'total' => $transfer->quantity,
+            'items' => $transfer->items->map(function ($item) {
+                return [
+                    'code' => $item->abaya_code,
+                    'color' => $item->color_name,
+                    'size' => $item->size_name,
+                    'qty' => $item->quantity,
+                ];
+            })->toArray(),
+            'note' => $transfer->notes ?? '',
+        ];
+    });
+
+    return view('wharehouse.movements_log', compact('transfers', 'search', 'dateFrom', 'dateTo'));
+}
+
+/**
  * Export transfer history to Excel
  */
 public function export_transfers_excel(Request $request)

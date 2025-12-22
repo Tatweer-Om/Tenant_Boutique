@@ -444,7 +444,7 @@
         <thead class="bg-gray-100 text-gray-700">
           <tr>
             <th class="py-3 px-4 text-center">{{ trans('messages.select', [], session('locale')) }}</th>
-            <th class="py-3 px-4 text-right">#</th>
+            <th class="py-3 px-4 text-right">Order No</th>
             <th class="py-3 px-4 text-right">{{ trans('messages.customer', [], session('locale')) }}</th>
             <th class="py-3 px-4 text-right">{{ trans('messages.source', [], session('locale')) }}</th>
             <th class="py-3 px-4 text-right">{{ trans('messages.date', [], session('locale')) }}</th>
@@ -470,7 +470,7 @@
                        class="w-4 h-4 text-indigo-600">
               </td>
 
-              <td class="py-3 px-4" x-text="order.id"></td>
+              <td class="py-3 px-4 font-semibold text-indigo-600" x-text="order.order_no || '—'"></td>
               <td class="py-3 px-4" x-text="order.customer"></td>
 
               <!-- مصدر الطلب -->
@@ -541,8 +541,8 @@
                        :checked="isReadySelected(order.id)"
                        @change="toggleReadySelection(order)"
                        class="w-4 h-4 text-indigo-600">
-                <span class="text-xs text-gray-500">#</span>
-                <span class="font-semibold" x-text="order.id"></span>
+                <span class="text-xs text-gray-500">Order No:</span>
+                <span class="font-semibold text-indigo-600" x-text="order.order_no || '—'"></span>
               </div>
               <span :class="statusBadge(order.status)" x-text="statusLabel(order.status)"></span>
             </div>

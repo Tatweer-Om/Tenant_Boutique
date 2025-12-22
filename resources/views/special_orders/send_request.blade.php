@@ -62,9 +62,10 @@
 
         <div class="space-y-2 text-sm">
 
-          <div><strong>{{ trans('messages.order_number', [], session('locale')) }}:</strong> <span x-text="selectedItem.orderId"></span></div>
+          <div><strong>{{ trans('messages.order_number', [], session('locale')) }}:</strong> <span x-text="selectedItem.order_no || ('#' + selectedItem.orderId)"></span></div>
           <div><strong>{{ trans('messages.order_source', [], session('locale')) }}:</strong> <span x-text="selectedItem.source"></span></div>
           <div><strong>{{ trans('messages.order_date', [], session('locale')) }}:</strong> <span x-text="selectedItem.date"></span></div>
+          <div><strong>{{ trans('messages.quantity', [], session('locale')) ?: 'Quantity' }}:</strong> <span x-text="selectedItem.quantity || 1"></span></div>
 
           <div><strong>{{ trans('messages.abaya_length', [], session('locale')) }}:</strong> <span x-text="selectedItem.length"></span></div>
           <div><strong>{{ trans('messages.bust_one_side', [], session('locale')) }}:</strong> <span x-text="selectedItem.bust"></span></div>
@@ -120,6 +121,7 @@
             <tr class="bg-gray-100 text-gray-700">
               <th class="p-2 border">{{ trans('messages.order_number', [], session('locale')) }}</th>
               <th class="p-2 border">{{ trans('messages.customer', [], session('locale')) }}</th>
+              <th class="p-2 border">{{ trans('messages.quantity', [], session('locale')) ?: 'Quantity' }}</th>
               <th class="p-2 border">{{ trans('messages.sizes', [], session('locale')) }}</th>
               <th class="p-2 border">{{ trans('messages.tailor', [], session('locale')) }}</th>
               <th class="p-2 border">{{ trans('messages.notes', [], session('locale')) }}</th>
@@ -129,8 +131,11 @@
           <tbody>
             <template x-for="i in selectedItems" :key="i.rowId">
               <tr>
-                <td class="p-2 border" x-text="i.orderId"></td>
+                <td class="p-2 border" x-text="i.order_no || ('#' + i.orderId)"></td>
                 <td class="p-2 border" x-text="i.customer"></td>
+                <td class="p-2 border text-center">
+                  <span class="font-semibold" x-text="i.quantity || 1"></span>
+                </td>
                 <td class="p-2 border">
                   {{ trans('messages.abaya_length', [], session('locale')) }}: <span x-text="i.length"></span><br>
                   {{ trans('messages.bust_one_side', [], session('locale')) }}: <span x-text="i.bust"></span><br>
@@ -232,6 +237,7 @@
               <th class="py-3 px-4 text-right">{{ trans('messages.order', [], session('locale')) }}</th>
               <th class="py-3 px-4 text-right">{{ trans('messages.customer', [], session('locale')) }}</th>
               <th class="py-3 px-4 text-right">{{ trans('messages.abaya', [], session('locale')) }}</th>
+              <th class="py-3 px-4 text-right">{{ trans('messages.quantity', [], session('locale')) ?: 'Quantity' }}</th>
               <th class="py-3 px-4 text-right">{{ trans('messages.tailor', [], session('locale')) }}</th>
               <th class="py-3 px-4 text-right">{{ trans('messages.status', [], session('locale')) }}</th>
               <th class="py-3 px-4 text-right">{{ trans('messages.ago', [], session('locale')) }}</th>
@@ -251,8 +257,8 @@
                          class="w-4 h-4 text-indigo-600">
                 </td>
 
-                <!-- order id -->
-                <td class="py-3 px-4 font-medium" x-text="'#' + item.orderId"></td>
+                <!-- order no -->
+                <td class="py-3 px-4 font-medium text-indigo-600" x-text="item.order_no || ('#' + item.orderId)"></td>
 
                 <!-- customer -->
                 <td class="py-3 px-4" x-text="item.customer"></td>
@@ -266,6 +272,11 @@
                       <div class="text-xs text-gray-500" x-text="'{{ trans('messages.code', [], session('locale')) }}: ' + item.code"></div>
                     </div>
                   </div>
+                </td>
+
+                <!-- quantity -->
+                <td class="py-3 px-4 text-center">
+                  <span class="font-semibold text-indigo-600" x-text="item.quantity || 1"></span>
                 </td>
 
                 <!-- tailor + details button -->
@@ -296,7 +307,7 @@
             </template>
 
             <tr x-show="sortedProcessing().length === 0">
-              <td colspan="7" class="py-6 text-center text-gray-500">
+              <td colspan="8" class="py-6 text-center text-gray-500">
                 {{ trans('messages.no_abayas_sent_to_tailor', [], session('locale')) }}
               </td>
             </tr>
@@ -371,6 +382,7 @@
               <th class="py-3 px-4 text-right">{{ trans('messages.order', [], session('locale')) }}</th>
               <th class="py-3 px-4 text-right">{{ trans('messages.customer', [], session('locale')) }}</th>
               <th class="py-3 px-4 text-right">{{ trans('messages.abaya', [], session('locale')) }}</th>
+              <th class="py-3 px-4 text-right">{{ trans('messages.quantity', [], session('locale')) ?: 'Quantity' }}</th>
               <th class="py-3 px-4 text-right">{{ trans('messages.sizes', [], session('locale')) }}</th>
               <th class="py-3 px-4 text-right">{{ trans('messages.tailor', [], session('locale')) }}</th>
               <th class="py-3 px-4 text-right">{{ trans('messages.status', [], session('locale')) }}</th>
@@ -389,7 +401,7 @@
                          class="w-4 h-4 text-indigo-600">
                 </td>
 
-                <td class="py-3 px-4 font-medium" x-text="'#' + item.orderId"></td>
+                <td class="py-3 px-4 font-medium text-indigo-600" x-text="item.order_no || ('#' + item.orderId)"></td>
 
                 <td class="py-3 px-4" x-text="item.customer"></td>
 
@@ -401,6 +413,10 @@
                       <div class="text-xs text-gray-500" x-text="'{{ trans('messages.code', [], session('locale')) }}: ' + item.code"></div>
                     </div>
                   </div>
+                </td>
+
+                <td class="py-3 px-4 text-center">
+                  <span class="font-semibold text-indigo-600" x-text="item.quantity || 1"></span>
                 </td>
 
                 <td class="py-3 px-4">
@@ -438,7 +454,7 @@
             </template>
 
             <tr x-show="filteredAbayas().length === 0">
-              <td colspan="8" class="text-center py-6 text-gray-400">
+              <td colspan="9" class="text-center py-6 text-gray-400">
                 {{ trans('messages.no_matching_abayas', [], session('locale')) }}
               </td>
             </tr>
@@ -457,7 +473,7 @@
         <h2 class="text-xl font-bold mb-4 text-indigo-800">📦 {{ trans('messages.sending_summary', [], session('locale')) }}</h2>
 
         <p class="mb-2 text-sm">{{ trans('messages.number_of_abayas', [], session('locale')) }}:
-          <span class="font-bold" x-text="selectedItems.length"></span>
+          <span class="font-bold" x-text="selectedItems.reduce((sum, item) => sum + (item.quantity || 1), 0)"></span>
         </p>
 
         <div class="mb-2 text-sm font-medium">{{ trans('messages.by_tailor', [], session('locale')) }}:</div>

@@ -59,6 +59,16 @@
               class="py-3 px-3 flex items-center gap-1">
         <span class="material-symbols-outlined text-base">send</span> {{ trans('messages.send_material', [], session('locale')) }}
       </button>
+      <button @click="tab='repair_history'"
+              :class="tab==='repair_history' ? 'text-[var(--primary-color)] border-b-2 border-[var(--primary-color)] font-bold' : 'text-gray-600'"
+              class="py-3 px-3 flex items-center gap-1">
+        <span class="material-symbols-outlined text-base">build</span> Repair History
+      </button>
+      <button @click="tab='late_delivery'"
+              :class="tab==='late_delivery' ? 'text-[var(--primary-color)] border-b-2 border-[var(--primary-color)] font-bold' : 'text-gray-600'"
+              class="py-3 px-3 flex items-center gap-1">
+        <span class="material-symbols-outlined text-base">error</span> {{ trans('messages.late_delivery_history', [], session('locale')) ?: 'Late Delivery History' }}
+      </button>
     </div>
 
     <!-- SPECIAL ORDERS TAB -->
@@ -288,6 +298,156 @@
                 </td>
               </tr>
               @endforeach
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- REPAIR HISTORY TAB -->
+    <section x-show="tab==='repair_history'" x-transition>
+      <div class="bg-white border border-pink-100 rounded-2xl p-6 mt-4">
+        <h3 class="text-xl font-bold text-[var(--primary-color)] mb-6">Repair History</h3>
+        
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div class="p-4 rounded-2xl bg-gradient-to-br from-orange-50 to-orange-100 shadow-md border border-orange-200">
+            <p class="text-sm text-gray-600 mb-1">Total Repairs</p>
+            <h3 class="text-3xl font-extrabold text-orange-600">{{ $repairHistoryData['total_repairs'] ?? 0 }}</h3>
+          </div>
+          <div class="p-4 rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 shadow-md border border-blue-200">
+            <p class="text-sm text-gray-600 mb-1">Total Delivery Charges</p>
+            <h3 class="text-3xl font-extrabold text-blue-600">{{ number_format($repairHistoryData['total_delivery_charges'] ?? 0, 3) }} ر.ع</h3>
+          </div>
+          <div class="p-4 rounded-2xl bg-gradient-to-br from-purple-50 to-purple-100 shadow-md border border-purple-200">
+            <p class="text-sm text-gray-600 mb-1">Total Repair Cost</p>
+            <h3 class="text-3xl font-extrabold text-purple-600">{{ number_format($repairHistoryData['total_repair_cost'] ?? 0, 3) }} ر.ع</h3>
+          </div>
+        </div>
+
+        <!-- Repair History Table -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm text-right">
+            <thead class="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th class="px-4 py-3 font-semibold text-gray-700">Transfer Number</th>
+                <th class="px-4 py-3 font-semibold text-gray-700">Design Name</th>
+                <th class="px-4 py-3 font-semibold text-gray-700">Code</th>
+                <th class="px-4 py-3 font-semibold text-gray-700">Customer</th>
+                <th class="px-4 py-3 font-semibold text-gray-700">Sent Date</th>
+                <th class="px-4 py-3 font-semibold text-gray-700">Received Date</th>
+                <th class="px-4 py-3 font-semibold text-gray-700">Delivery Charges</th>
+                <th class="px-4 py-3 font-semibold text-gray-700">Repair Cost</th>
+                <th class="px-4 py-3 font-semibold text-gray-700">Cost Bearer</th>
+                <th class="px-4 py-3 font-semibold text-gray-700">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              @if(isset($repairHistoryData['items']) && count($repairHistoryData['items']) > 0)
+                @foreach($repairHistoryData['items'] as $item)
+                <tr class="border-b border-gray-100 hover:bg-pink-50/50">
+                  <td class="px-4 py-3 font-semibold text-indigo-600">{{ $item['transfer_number'] ?? '—' }}</td>
+                  <td class="px-4 py-3">{{ $item['design_name'] ?? 'N/A' }}</td>
+                  <td class="px-4 py-3">{{ $item['abaya_code'] ?? 'N/A' }}</td>
+                  <td class="px-4 py-3">
+                    <div>
+                      <p class="font-medium">{{ $item['customer_name'] ?? 'N/A' }}</p>
+                      <p class="text-xs text-gray-500">{{ $item['customer_phone'] ?? 'N/A' }}</p>
+                    </div>
+                  </td>
+                  <td class="px-4 py-3">{{ $item['sent_date'] ?? '—' }}</td>
+                  <td class="px-4 py-3">{{ $item['received_date'] ?? '—' }}</td>
+                  <td class="px-4 py-3 font-semibold">{{ $item['delivery_charges'] ? number_format($item['delivery_charges'], 3) . ' ر.ع' : '—' }}</td>
+                  <td class="px-4 py-3 font-semibold">{{ $item['repair_cost'] ? number_format($item['repair_cost'], 3) . ' ر.ع' : '—' }}</td>
+                  <td class="px-4 py-3">
+                    @if($item['cost_bearer'] === 'customer')
+                      <span class="px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">Customer</span>
+                    @elseif($item['cost_bearer'] === 'company')
+                      <span class="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">Company</span>
+                    @else
+                      <span class="text-gray-400">—</span>
+                    @endif
+                  </td>
+                  <td class="px-4 py-3">
+                    @if($item['status'] === 'received_from_tailor')
+                      <span class="px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">Received</span>
+                    @elseif($item['status'] === 'delivered_to_tailor')
+                      <span class="px-3 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">Delivered</span>
+                    @else
+                      <span class="px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">{{ $item['status'] ?? '—' }}</span>
+                    @endif
+                  </td>
+                </tr>
+                @endforeach
+              @else
+                <tr>
+                  <td colspan="10" class="px-4 py-8 text-center text-gray-500">No repair history found</td>
+                </tr>
+              @endif
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- LATE DELIVERY HISTORY TAB -->
+    <section x-show="tab==='late_delivery'" x-transition x-cloak>
+      <div class="bg-white border border-pink-100 rounded-2xl p-6 mt-4">
+        <h3 class="text-xl font-bold text-[var(--primary-color)] mb-6">{{ trans('messages.late_delivery_history', [], session('locale')) ?: 'Late Delivery History' }}</h3>
+        
+        <!-- Summary Card -->
+        <div class="mb-6">
+          <div class="p-4 rounded-2xl bg-gradient-to-br from-red-50 to-red-100 shadow-md border border-red-200 inline-block">
+            <p class="text-sm text-gray-600 mb-1">{{ trans('messages.total_late_deliveries', [], session('locale')) ?: 'Total Late Deliveries' }}</p>
+            <h3 class="text-3xl font-extrabold text-red-600">{{ $lateDeliveryHistory['total_late'] ?? 0 }}</h3>
+          </div>
+        </div>
+
+        <!-- Late Delivery Table -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm text-right">
+            <thead class="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th class="px-4 py-3 font-semibold text-gray-700">{{ trans('messages.order_number', [], session('locale')) }}</th>
+                <th class="px-4 py-3 font-semibold text-gray-700">{{ trans('messages.customer_name', [], session('locale')) }}</th>
+                <th class="px-4 py-3 font-semibold text-gray-700">{{ trans('messages.abaya_code', [], session('locale')) }}</th>
+                <th class="px-4 py-3 font-semibold text-gray-700">{{ trans('messages.design_name', [], session('locale')) }}</th>
+                <th class="px-4 py-3 font-semibold text-gray-700">{{ trans('messages.quantity', [], session('locale')) }}</th>
+                <th class="px-4 py-3 font-semibold text-gray-700">{{ trans('messages.sent_date', [], session('locale')) }}</th>
+                <th class="px-4 py-3 font-semibold text-gray-700">{{ trans('messages.days_late', [], session('locale')) ?: 'Days Late' }}</th>
+                <th class="px-4 py-3 font-semibold text-gray-700">{{ trans('messages.marked_late_at', [], session('locale')) ?: 'Marked Late At' }}</th>
+                <th class="px-4 py-3 font-semibold text-gray-700">{{ trans('messages.status', [], session('locale')) }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @if(isset($lateDeliveryHistory['items']) && count($lateDeliveryHistory['items']) > 0)
+                @foreach($lateDeliveryHistory['items'] as $item)
+                <tr class="border-b hover:bg-red-50 transition">
+                  <td class="px-4 py-3 font-semibold text-red-600">{{ $item['order_no'] }}</td>
+                  <td class="px-4 py-3">{{ $item['customer_name'] }}</td>
+                  <td class="px-4 py-3">{{ $item['abaya_code'] }}</td>
+                  <td class="px-4 py-3">{{ $item['design_name'] }}</td>
+                  <td class="px-4 py-3 text-center">{{ $item['quantity'] }}</td>
+                  <td class="px-4 py-3">{{ $item['sent_date'] ?? '—' }}</td>
+                  <td class="px-4 py-3">
+                    <span class="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                      {{ $item['days_late'] }} {{ trans('messages.days', [], session('locale')) }}
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 text-sm text-gray-600">{{ $item['marked_late_at'] ?? '—' }}</td>
+                  <td class="px-4 py-3">
+                    <span class="px-3 py-1 rounded-full text-xs font-semibold 
+                      {{ $item['current_status'] === 'received' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700' }}">
+                      {{ $item['current_status'] === 'received' ? trans('messages.received', [], session('locale')) : trans('messages.processing', [], session('locale')) }}
+                    </span>
+                  </td>
+                </tr>
+                @endforeach
+              @else
+                <tr>
+                  <td colspan="9" class="px-4 py-8 text-center text-gray-500">{{ trans('messages.no_late_deliveries', [], session('locale')) ?: 'No late deliveries found' }}</td>
+                </tr>
+              @endif
             </tbody>
           </table>
         </div>
