@@ -48,6 +48,13 @@ main {
     /* Simple dropdown visibility helpers */
     .dropdown { visibility: hidden; opacity: 0; transform: translateY(6px); transition: .18s ease; }
     .dropdown.show { visibility: visible; opacity: 1; transform: translateY(0); }
+    /* Active menu item styling - text color only */
+    nav a.text-accent.font-semibold {
+        color: var(--accent) !important;
+    }
+    nav button.text-accent.font-semibold {
+        color: var(--accent) !important;
+    }
   /* //mobie side bar */
   
   /* ===== Overlay خلفية شفافة ===== */

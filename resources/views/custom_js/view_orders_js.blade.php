@@ -201,6 +201,7 @@ document.addEventListener('alpine:init', () => {
         new: '{{ trans('messages.new', [], session('locale')) }}',
         processing: '{{ trans('messages.in_progress', [], session('locale')) }}',
         ready: '{{ trans('messages.ready_for_delivery', [], session('locale')) }}',
+        partially_ready: '{{ trans('messages.partially_ready', [], session('locale')) }}',
         delivered: '{{ trans('messages.delivered', [], session('locale')) }}'
       };
       return labels[s] || '';
@@ -211,6 +212,7 @@ document.addEventListener('alpine:init', () => {
         new: 'bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-[11px] font-semibold',
         processing: 'bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[11px] font-semibold',
         ready: 'bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-[11px] font-semibold',
+        partially_ready: 'bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-[11px] font-semibold',
         delivered: 'bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[11px] font-semibold'
       }[s] || 'bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-[11px] font-semibold';
     },

@@ -20,12 +20,26 @@ use App\Http\Controllers\AreaController;
 use App\Http\Controllers\CityController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\SettingsController;
 
 Route::get('/', function () {
-    return view('welcome');
+    if (auth()->check()) {
+        return redirect()->route('dashboard');
+    }
+    return redirect()->route('login_page');
 });
 
 Route::get('dashboard', [HomeController::class, 'index'])->name('dashboard');
+Route::get('dashboard/monthly-data', [HomeController::class, 'getMonthlyData'])->name('dashboard.monthly_data');
+Route::get('dashboard/abayas-under-tailoring', [HomeController::class, 'getAbayasUnderTailoring'])->name('dashboard.abayas_under_tailoring');
+Route::get('dashboard/low-stock-items', [HomeController::class, 'getLowStockItems'])->name('dashboard.low_stock_items');
+Route::get('dashboard/boutique-rent-reminders', [HomeController::class, 'getBoutiqueRentReminders'])->name('dashboard.boutique_rent_reminders');
+Route::get('dashboard/recent-special-orders', [HomeController::class, 'getRecentSpecialOrders'])->name('dashboard.recent_special_orders');
+
+// Settings Routes
+Route::get('settings', [SettingsController::class, 'index'])->name('settings');
+Route::get('settings/get', [SettingsController::class, 'getSettings'])->name('settings.get');
+Route::post('settings/update', [SettingsController::class, 'update'])->name('settings.update');
 
 
 Route::get('color', [ColorController::class, 'index'])->name('color');
@@ -65,6 +79,10 @@ Route::get('tailors/list', [TailorController::class, 'gettailors']);
 Route::get('tailors/{tailor}', [TailorController::class, 'show']);
 Route::get('tailor_profile/{id}', [TailorController::class, 'tailor_profile'])->name('tailor_profile');
 
+// Late Delivery Routes
+Route::post('special-orders/check-late-deliveries', [SpecialOrderController::class, 'checkAndMarkLateDeliveries'])->name('special_orders.check_late');
+Route::get('special-orders/late-deliveries', [SpecialOrderController::class, 'getLateDeliveries'])->name('special_orders.late_deliveries');
+
 
 Route::get('user', [UserController::class, 'index'])->name('user');
 Route::post('users', [UserController::class, 'store']);
@@ -74,6 +92,7 @@ Route::get('users/list', [UserController::class, 'getusers']);
 Route::get('users/{user}', [UserController::class, 'show']);
 Route::get('login_page', [UserController::class, 'login_page'])->name('login_page');
 Route::post('/login-user', [UserController::class, 'login_user'])->name('login_user');
+Route::post('/logout', [UserController::class, 'logout'])->name('logout');
 
 Route::get('colors', [ColorController::class, 'index']);
 Route::post('colors', [ColorController::class, 'store']);
@@ -198,9 +217,17 @@ Route::get('send_request/data', [SpecialOrderController::class, 'getTailorAssign
 Route::post('send_request/assign', [SpecialOrderController::class, 'assignItemsToTailor'])->name('send_request.assign');
 Route::post('send_request/receive', [SpecialOrderController::class, 'markTailorItemsReceived'])->name('send_request.receive');
 
+Route::get('maintenance', [SpecialOrderController::class, 'maintenance'])->name('maintenance');
+Route::get('maintenance/data', [SpecialOrderController::class, 'getMaintenanceData'])->name('maintenance.data');
+Route::get('maintenance/history', [SpecialOrderController::class, 'getRepairHistory'])->name('maintenance.history');
+Route::post('maintenance/send-repair', [SpecialOrderController::class, 'sendForRepair'])->name('maintenance.send_repair');
+Route::post('maintenance/receive', [SpecialOrderController::class, 'receiveFromTailor'])->name('maintenance.receive');
+Route::post('maintenance/deliver', [SpecialOrderController::class, 'markRepairedDelivered'])->name('maintenance.deliver');
+
 Route::get('spcialorder', [SpecialOrderController::class, 'index'])->name('spcialorder');
 Route::post('add_spcialorder', [SpecialOrderController::class, 'add_specialorder'])->name('add_spcialorder');
 Route::get('view_special_order', [SpecialOrderController::class, 'view_special_order'])->name('view_special_order');
+Route::get('special-order-bill/{id}', [SpecialOrderController::class, 'showBill'])->name('special_order.bill');
 Route::get('get_orders_list', [SpecialOrderController::class, 'getOrdersList'])->name('get_orders_list');
 Route::post('record_payment', [SpecialOrderController::class, 'recordPayment'])->name('record_payment');
 Route::post('update_delivery_status', [SpecialOrderController::class, 'updateDeliveryStatus'])->name('update_delivery_status');
@@ -217,6 +244,7 @@ Route::post('edit_wharehouse', [WharehouseController::class, 'edit_wharehouse'])
 Route::post('update_wharehouse', [WharehouseController::class, 'update_wharehouse'])->name('update_wharehouse');
 Route::post('delete_wharehouse', [WharehouseController::class, 'delete_wharehouse'])->name('delete_wharehouse');
 Route::get('manage_quantity', [WharehouseController::class, 'manage_quantity'])->name('manage_quantity');
+Route::get('movements_log', [WharehouseController::class, 'movements_log'])->name('movements_log');
 Route::get('get_inventory', [WharehouseController::class, 'get_inventory'])->name('get_inventory');
 Route::get('get_channel_inventory', [WharehouseController::class, 'get_channel_inventory'])->name('get_channel_inventory');
 Route::post('execute_transfer', [WharehouseController::class, 'execute_transfer'])->name('execute_transfer');

@@ -8,6 +8,7 @@ use App\Models\Stock;
 use App\Models\Tailor;
 use App\Models\Customer;
 use App\Models\SpecialOrder;
+use App\Models\Settings;
 use Illuminate\Http\Request;
 use App\Models\SpecialOrderItem;
 use Illuminate\Support\Facades\DB;
@@ -401,8 +402,13 @@ public function getOrdersList(Request $request)
             $this->updateOrderStatusBasedOnItems($order);
             $calculatedStatus = $order->status;
 
+            // Generate order number: YYYY-00ID (e.g., 2025-0001)
+            $orderDate = Carbon::parse($order->created_at);
+            $orderNumber = $orderDate->format('Y') . '-' . str_pad($order->id, 4, '0', STR_PAD_LEFT);
+
             return [
                 'id' => $order->id,
+                'order_no' => $orderNumber,
                 'customer' => optional($customer)->name ?? 'N/A',
                 'governorate' => $governorate,
                 'city' => $city,
@@ -580,14 +586,24 @@ public function getTailorAssignmentsData(Request $request)
     // Join names into a single string
     $originalTailor = implode(', ', $tailors);
 }
+                
+                // Generate order number in same format as view_special_order: YYYY-00ID
+                $orderNo = '—';
+                if ($order) {
+                    $orderDate = Carbon::parse($order->created_at);
+                    $orderNo = $orderDate->format('Y') . '-' . str_pad($order->id, 4, '0', STR_PAD_LEFT);
+                }
+                
                 return [
                     'rowId' => $item->id,
                     'orderId' => $order->id ?? 0,
+                    'order_no' => $orderNo,
                     'source' => $order->source ?? '',
                     'customer' => $order->customer->name ?? 'N/A',
                     'code' => $item->abaya_code ?? '',
                     'abayaName' => $item->design_name ?? $item->abaya_code ?? 'N/A',
                     'image' => $image,
+                    'quantity' => $item->quantity ?? 1,
                     'length' => $item->abaya_length,
                     'bust' => $item->bust,
                     'sleeves' => $item->sleeves_length,
@@ -621,14 +637,23 @@ public function getTailorAssignmentsData(Request $request)
                     $originalTailor = $tailor ? $tailor->tailor_name : '';
                 }
 
+                // Generate order number in same format as view_special_order: YYYY-00ID
+                $orderNo = '—';
+                if ($order) {
+                    $orderDate = Carbon::parse($order->created_at);
+                    $orderNo = $orderDate->format('Y') . '-' . str_pad($order->id, 4, '0', STR_PAD_LEFT);
+                }
+
                 return [
                     'rowId' => $item->id,
                     'orderId' => $order->id ?? 0,
+                    'order_no' => $orderNo,
                     'source' => $order->source ?? '',
                     'customer' => $order->customer->name ?? 'N/A',
                     'code' => $item->abaya_code ?? '',
                     'abayaName' => $item->design_name ?? $item->abaya_code ?? 'N/A',
                     'image' => $image,
+                    'quantity' => $item->quantity ?? 1,
                     'length' => $item->abaya_length,
                     'bust' => $item->bust,
                     'sleeves' => $item->sleeves_length,
@@ -691,10 +716,23 @@ public function getTailorAssignmentsData(Request $request)
                 return $status === 'received';
             })) === count($itemStatuses);
             
+            $hasReceived = count(array_filter($itemStatuses, function($status) {
+                return $status === 'received';
+            })) > 0;
+            
+            $hasProcessing = count(array_filter($itemStatuses, function($status) {
+                return $status === 'processing';
+            })) > 0;
+            
             if ($allNew) {
                 $order->status = 'new';
             } elseif ($allReceived) {
                 $order->status = 'ready';
+            } elseif ($hasReceived && ($hasProcessing || count(array_filter($itemStatuses, function($status) {
+                return $status === 'new';
+            })) > 0)) {
+                // Some items are ready but others are still with tailor or new
+                $order->status = 'partially_ready';
             } else {
                 $order->status = 'processing';
             }
@@ -749,6 +787,14 @@ public function assignItemsToTailor(Request $request)
 
         DB::commit();
 
+        // Check for late deliveries after assignment (don't wait for response)
+        try {
+            $this->checkAndMarkLateDeliveries();
+        } catch (\Exception $e) {
+            // Log but don't fail the assignment
+            \Log::error('Error checking late deliveries after assignment: ' . $e->getMessage());
+        }
+
         return response()->json([
             'success' => true,
             'message' => count($assignments) . ' item(s) assigned to tailor successfully'
@@ -761,6 +807,104 @@ public function assignItemsToTailor(Request $request)
             'message' => 'Error assigning items: ' . $e->getMessage()
         ], 500);
     }
+}
+
+/**
+ * Check and mark items as late delivery based on settings
+ */
+public function checkAndMarkLateDeliveries()
+{
+    try {
+        $settings = Settings::getSettings();
+        $lateDeliveryWeeks = $settings->late_delivery_weeks ?? 2;
+        
+        // Get all items that are with tailor (processing status) and not yet marked as late
+        $itemsWithTailor = SpecialOrderItem::where('tailor_status', 'processing')
+            ->whereNotNull('sent_to_tailor_at')
+            ->where('is_late_delivery', false)
+            ->get();
+        
+        $now = Carbon::now();
+        $markedLate = 0;
+        
+        foreach ($itemsWithTailor as $item) {
+            $sentDate = Carbon::parse($item->sent_to_tailor_at);
+            $weeksPassed = $sentDate->diffInWeeks($now);
+            
+            // If weeks passed exceeds the late delivery threshold, mark as late
+            if ($weeksPassed >= $lateDeliveryWeeks) {
+                $item->is_late_delivery = true;
+                $item->marked_late_at = $now;
+                $item->save();
+                $markedLate++;
+            }
+        }
+        
+        return response()->json([
+            'success' => true,
+            'marked_late' => $markedLate
+        ]);
+    } catch (\Exception $e) {
+        \Log::error('Error checking late deliveries: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error checking late deliveries'
+        ], 500);
+    }
+}
+
+/**
+ * Get late delivery items for dashboard
+ */
+public function getLateDeliveries()
+{
+    $lateItems = SpecialOrderItem::with(['specialOrder.customer', 'tailor', 'stock.images'])
+        ->where('is_late_delivery', true)
+        ->where('tailor_status', 'processing')
+        ->orderBy('marked_late_at', 'DESC')
+        ->get()
+        ->map(function($item) {
+            $order = $item->specialOrder;
+            $tailor = $item->tailor;
+            $stock = $item->stock;
+            
+            $image = '/images/placeholder.png';
+            if ($stock && $stock->images->first()) {
+                $imagePath = $stock->images->first()->image_path;
+                if (strpos($imagePath, 'http') === 0) {
+                    $image = $imagePath;
+                } else {
+                    $image = asset('images/stock_images/' . basename($imagePath));
+                }
+            }
+            
+            $sentDate = $item->sent_to_tailor_at ? Carbon::parse($item->sent_to_tailor_at) : null;
+            $daysLate = $sentDate ? $sentDate->diffInDays(Carbon::now()) : 0;
+            
+            $orderDate = $order ? Carbon::parse($order->created_at) : null;
+            $orderNo = $orderDate ? $orderDate->format('Y') . '-' . str_pad($order->id, 4, '0', STR_PAD_LEFT) : '—';
+            
+            return [
+                'id' => $item->id,
+                'order_no' => $orderNo,
+                'order_id' => $order->id ?? 0,
+                'customer_name' => $order->customer->name ?? 'N/A',
+                'customer_phone' => $order->customer->phone ?? 'N/A',
+                'abaya_code' => $item->abaya_code ?? 'N/A',
+                'design_name' => $item->design_name ?? $item->abaya_code ?? 'N/A',
+                'image' => $image,
+                'tailor_name' => $tailor->tailor_name ?? 'N/A',
+                'tailor_id' => $item->tailor_id,
+                'sent_date' => $sentDate ? $sentDate->format('Y-m-d') : null,
+                'days_late' => $daysLate,
+                'marked_late_at' => $item->marked_late_at ? Carbon::parse($item->marked_late_at)->format('Y-m-d H:i') : null,
+            ];
+        });
+    
+    return response()->json([
+        'success' => true,
+        'items' => $lateItems
+    ]);
 }
 
 public function markTailorItemsReceived(Request $request)
@@ -788,7 +932,8 @@ public function markTailorItemsReceived(Request $request)
             ->where('tailor_status', 'processing')
             ->update([
                 'tailor_status' => 'received',
-                'received_from_tailor_at' => now()
+                'received_from_tailor_at' => now(),
+                'is_late_delivery' => false // Unmark as late when received
             ]);
 
         // Update order statuses based on items
@@ -812,6 +957,267 @@ public function markTailorItemsReceived(Request $request)
             'success' => false,
             'message' => 'Error marking items as received: ' . $e->getMessage()
         ], 500);
+    }
+}
+
+public function maintenance()
+{
+    return view('special_orders.maintenance');
+}
+
+public function getMaintenanceData()
+{
+    try {
+        // Get all tailors for the dropdown
+        $tailors = Tailor::select('id', 'tailor_name as name')->get();
+
+        // Get items from special orders that have status 'ready' (received) or 'delivered'
+        // Also include items that are already in maintenance
+        $items = SpecialOrderItem::with(['specialOrder.customer', 'stock.images', 'maintenanceTailor'])
+            ->whereHas('specialOrder', function($query) {
+                $query->whereIn('status', ['ready', 'delivered']);
+            })
+            ->where(function($query) {
+                // Show items that are either:
+                // 1. Not yet in maintenance (maintenance_status is null)
+                // 2. In maintenance but not yet received from tailor
+                $query->whereNull('maintenance_status')
+                      ->orWhere('maintenance_status', '!=', 'received_from_tailor');
+            })
+            ->get()
+            ->map(function($item) {
+                $order = $item->specialOrder;
+                $stock = $item->stock;
+                $customer = $order ? $order->customer : null;
+                
+                // Get image
+                $image = '/images/placeholder.png';
+                if ($stock && $stock->images && $stock->images->first()) {
+                    $image = $stock->images->first()->image_path;
+                }
+
+                // Generate order number in same format as view_special_order: YYYY-00ID
+                $orderNo = '—';
+                if ($order) {
+                    $orderDate = Carbon::parse($order->created_at);
+                    $orderNo = $orderDate->format('Y') . '-' . str_pad($order->id, 4, '0', STR_PAD_LEFT);
+                }
+
+                return [
+                    'id' => $item->id,
+                    'design_name' => $item->design_name ?? $item->abaya_code ?? 'N/A',
+                    'abaya_code' => $item->abaya_code ?? 'N/A',
+                    'order_no' => $orderNo,
+                    'customer_name' => $customer ? $customer->name : 'N/A',
+                    'customer_phone' => $customer ? $customer->phone : 'N/A',
+                    'maintenance_status' => $item->maintenance_status,
+                    'image' => $image,
+                    'delivery_charges' => $item->maintenance_delivery_charges ?? 0,
+                    'repair_cost' => $item->maintenance_repair_cost ?? 0,
+                    'cost_bearer' => $item->maintenance_cost_bearer ?? null,
+                    'transfer_number' => $item->maintenance_transfer_number ?? null,
+                    'order_status' => $order ? $order->status : null,
+                ];
+            });
+
+        // Calculate statistics
+        $statistics = [
+            'delivered_to_tailor' => SpecialOrderItem::where('maintenance_status', 'delivered_to_tailor')->count(),
+            'received_from_tailor' => SpecialOrderItem::where('maintenance_status', 'received_from_tailor')->count(),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'items' => $items,
+            'tailors' => $tailors,
+            'statistics' => $statistics
+        ]);
+    } catch (\Exception $e) {
+        \Log::error('Error in getMaintenanceData: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error fetching maintenance data: ' . $e->getMessage(),
+            'items' => [],
+            'tailors' => [],
+            'statistics' => ['delivered_to_tailor' => 0, 'received_from_tailor' => 0]
+        ], 500);
+    }
+}
+
+public function getRepairHistory()
+{
+    try {
+        // Get items that have been received from tailor (completed maintenance)
+        $history = SpecialOrderItem::with(['specialOrder.customer', 'stock.images', 'maintenanceTailor'])
+            ->where('maintenance_status', 'received_from_tailor')
+            ->orderBy('repaired_at', 'DESC')
+            ->get()
+            ->map(function($item) {
+                $order = $item->specialOrder;
+                $stock = $item->stock;
+                $customer = $order ? $order->customer : null;
+                $tailor = $item->maintenanceTailor;
+
+                // Generate order number in same format as view_special_order: YYYY-00ID
+                $orderNo = '—';
+                if ($order) {
+                    $orderDate = Carbon::parse($order->created_at);
+                    $orderNo = $orderDate->format('Y') . '-' . str_pad($order->id, 4, '0', STR_PAD_LEFT);
+                }
+
+                return [
+                    'id' => $item->id,
+                    'design_name' => $item->design_name ?? $item->abaya_code ?? 'N/A',
+                    'abaya_code' => $item->abaya_code ?? 'N/A',
+                    'order_no' => $orderNo,
+                    'transfer_number' => $item->maintenance_transfer_number ?? '—',
+                    'customer_name' => $customer ? $customer->name : 'N/A',
+                    'customer_phone' => $customer ? $customer->phone : 'N/A',
+                    'tailor_name' => $tailor ? $tailor->tailor_name : 'N/A',
+                    'sent_date' => $item->sent_for_repair_at ? Carbon::parse($item->sent_for_repair_at)->format('Y-m-d') : '—',
+                    'received_date' => $item->repaired_at ? Carbon::parse($item->repaired_at)->format('Y-m-d') : '—',
+                    'delivery_charges' => $item->maintenance_delivery_charges ?? 0,
+                    'repair_cost' => $item->maintenance_repair_cost ?? 0,
+                    'cost_bearer' => $item->maintenance_cost_bearer ?? null,
+                    'maintenance_status' => $item->maintenance_status,
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'history' => $history
+        ]);
+    } catch (\Exception $e) {
+        \Log::error('Error in getRepairHistory: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error fetching repair history: ' . $e->getMessage(),
+            'history' => []
+        ], 500);
+    }
+}
+
+public function sendForRepair(Request $request)
+{
+    try {
+        $itemId = $request->input('item_id');
+        $tailorId = $request->input('tailor_id');
+
+        if (!$itemId || !$tailorId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Item ID and Tailor ID are required'
+            ], 422);
+        }
+
+        $item = SpecialOrderItem::findOrFail($itemId);
+        $item->maintenance_status = 'delivered_to_tailor';
+        $item->maintenance_tailor_id = $tailorId;
+        $item->sent_for_repair_at = now();
+        $item->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Item sent to tailor for repair successfully'
+        ]);
+    } catch (\Exception $e) {
+        \Log::error('Error in sendForRepair: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error sending item for repair: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+public function receiveFromTailor(Request $request)
+{
+    try {
+        $itemId = $request->input('item_id');
+        $deliveryCharges = $request->input('delivery_charges', 0);
+        $repairCost = $request->input('repair_cost', 0);
+        $costBearer = $request->input('cost_bearer');
+
+        if (!$itemId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Item ID is required'
+            ], 422);
+        }
+
+        if (!$costBearer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cost bearer is required'
+            ], 422);
+        }
+
+        $item = SpecialOrderItem::findOrFail($itemId);
+        $item->maintenance_status = 'received_from_tailor';
+        $item->maintenance_delivery_charges = $deliveryCharges;
+        $item->maintenance_repair_cost = $repairCost;
+        $item->maintenance_cost_bearer = $costBearer;
+        $item->repaired_at = now();
+        $item->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Item received from tailor successfully'
+        ]);
+    } catch (\Exception $e) {
+        \Log::error('Error in receiveFromTailor: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error receiving item from tailor: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+public function markRepairedDelivered(Request $request)
+{
+    try {
+        $itemId = $request->input('item_id');
+
+        if (!$itemId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Item ID is required'
+            ], 422);
+        }
+
+        $item = SpecialOrderItem::findOrFail($itemId);
+        $item->repaired_delivered_at = now();
+        $item->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Item marked as delivered successfully'
+        ]);
+    } catch (\Exception $e) {
+        \Log::error('Error in markRepairedDelivered: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error marking item as delivered: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+public function showBill($id)
+{
+    try {
+        $specialOrder = SpecialOrder::with(['customer', 'items.stock.images'])
+            ->findOrFail($id);
+        
+        // Generate order number: YYYY-00ID (e.g., 2025-0001)
+        $orderDate = Carbon::parse($specialOrder->created_at);
+        $orderNumber = $orderDate->format('Y') . '-' . str_pad($specialOrder->id, 4, '0', STR_PAD_LEFT);
+        
+        return view('bills.special_order_bill', [
+            'specialOrder' => $specialOrder,
+            'orderNumber' => $orderNumber
+        ]);
+    } catch (\Exception $e) {
+        \Log::error('Error showing special order bill: ' . $e->getMessage());
+        abort(404, 'Special order not found');
     }
 }
 

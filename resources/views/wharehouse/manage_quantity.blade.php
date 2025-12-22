@@ -231,6 +231,11 @@
       <div class="flex flex-wrap items-center gap-3 mb-4">
         <h3 class="font-bold text-[var(--primary-color)]">{{ trans('messages.movements_log', [], session('locale')) }}</h3>
         <div class="ml-auto flex gap-2 w-full sm:w-auto">
+          <a href="{{url('movements_log')}}" 
+             class="px-4 py-2 rounded-lg bg-[var(--primary-color)] text-white hover:opacity-90 font-semibold text-sm inline-flex items-center gap-1">
+            <span class="material-symbols-outlined text-base">open_in_new</span>
+            {{ trans('messages.view_full_log', [], session('locale')) ?: 'View Full Log' }}
+          </a>
           <input type="search" class="h-10 px-3 border border-pink-200 rounded-lg flex-1 sm:w-64"
                  placeholder="{{ trans('messages.search_by_operation_number', [], session('locale')) }}" x-model="historySearch" @input="loadHistory()">
           <input type="date" class="h-10 px-2 border border-pink-200 rounded-lg" x-model="dateFromH" @change="loadHistory()">

@@ -9,11 +9,16 @@
       localStorage.setItem(`submenu:${id}`, isOpen ? "1" : "0");
     }
 
-    // Restore submenu states on load
+    // Restore submenu states on load - also check if menu has active class
     ["inventoryMenu","stock_menue","customersMenu","boutiquesMenu","tailorMenu","specialordersMenu","posMenu"].forEach(id => {
+      const menu = document.getElementById(id);
       const saved = localStorage.getItem(`submenu:${id}`);
-      if (saved === "1") {
-        document.getElementById(id)?.classList.add("active");
+      // If menu has active class (from PHP), show it
+      if (menu && menu.classList.contains("active")) {
+        menu.classList.add("active");
+        document.getElementById(`arrow-${id}`)?.classList.add("rotate-180");
+      } else if (saved === "1") {
+        menu?.classList.add("active");
         document.getElementById(`arrow-${id}`)?.classList.add("rotate-180");
       }
     });
@@ -88,6 +93,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const overlay = document.getElementById("overlay");
 
   if (!menuBtn || !sidebar || !overlay) return;
+
+  // Ensure overlay is hidden on page load
+  overlay.style.display = "none";
 
   // عند الضغط على زر القائمة
   menuBtn.addEventListener("click", (e) => {
