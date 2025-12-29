@@ -5,17 +5,11 @@ $(document).ready(function() {
 
         // --- Manual validations ---
         let material_name     = $('#material_name').val().trim();
-        let material_notes    = $('#material_notes').val().trim();
         let material_unit     = $('#material_unit').val();
         let material_category = $('#material_category').val();
 
         if (!material_name) {
             show_notification('error', '<?= trans("messages.enter_material_name", [], session("locale")) ?>');
-            return;
-        }
-
-        if (!material_notes) {
-            show_notification('error', '<?= trans("messages.enter_material_notes", [], session("locale")) ?>');
             return;
         }
 
@@ -62,7 +56,7 @@ $(document).ready(function() {
                         show_notification('error', value[0]); // show first validation error
                     });
                 } else {
-                    show_notification('error', 'Something went wrong!');
+                    show_notification('error', '<?= trans("messages.something_went_wrong", [], session("locale")) ?: "Something went wrong!" ?>');
                 }
             }
         });
@@ -126,7 +120,7 @@ let tailor = $('input[name="tailor_id[]"]:checked').map(function() {
         },
         success: function(response) {
             if (response.status === 'success') {
-                show_notification('success', 'Stock added successfully!');
+                show_notification('success', '<?= trans("messages.stock_added_successfully", [], session("locale")) ?: "Stock added successfully!" ?>');
                 $('#abaya_form')[0].reset();
                 // Clear Alpine images array
                 if (window.imageUploaderComponent) {
@@ -153,7 +147,7 @@ let tailor = $('input[name="tailor_id[]"]:checked').map(function() {
                     show_notification('error', value[0]); 
                 });
             } else {
-                show_notification('error', 'Something went wrong!');
+                show_notification('error', '<?= trans("messages.something_went_wrong", [], session("locale")) ?: "Something went wrong!" ?>');
             }
         }
     });

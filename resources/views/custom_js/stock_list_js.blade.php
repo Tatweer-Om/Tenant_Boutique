@@ -62,15 +62,18 @@
                     
                     tableRows += `
                 <tr class="border-t hover:bg-pink-50/60 transition" data-id="${stock.id}" data-quantity-status="${quantityStatus}">
-                    <td class="px-3 sm:px-4 md:px-6 py-3 whitespace-nowrap">
-                        <img src="${image}" class="w-12 h-16 object-cover rounded-md" />
+                    <td class="px-3 sm:px-4 md:px-6 py-3 text-center">
+                        <div class="flex items-start justify-center gap-3">
+                            <img src="${image}" class="w-12 h-16 object-cover rounded-md flex-shrink-0" />
+                            <div class="flex flex-col items-start text-left min-w-0 flex-1">
+                                <span class="font-bold break-words">${stock.design_name ?? stock.abaya_code ?? '-'}</span>
+                                ${categoryName !== '-' ? `<span class="text-sm text-gray-600">(${categoryName})</span>` : ''}
+                            </div>
+                        </div>
                     </td>
-                    <td class="px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap">${stock.abaya_code}</td>
-                    <td class="px-3 sm:px-4 md:px-6 py-3 whitespace-nowrap">${stock.design_name ?? '-'}</td>
-                    <td class="px-3 sm:px-4 md:px-6 py-3 whitespace-nowrap">${categoryName}</td>
-                    <td class="px-3 sm:px-4 md:px-6 py-3 whitespace-nowrap">${size}</td>
-                    <td class="px-3 sm:px-4 md:px-6 py-3 whitespace-nowrap">${color}</td>
-                    <td class="px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap">${quantity}</td>
+                    <td class="px-3 sm:px-4 md:px-6 py-3 text-center whitespace-nowrap">${size}</td>
+                    <td class="px-3 sm:px-4 md:px-6 py-3 text-center whitespace-nowrap">${color}</td>
+                    <td class="px-3 sm:px-4 md:px-6 py-3 text-center font-bold whitespace-nowrap">${quantity}</td>
                     <td class="px-3 sm:px-4 md:px-6 py-3 text-center whitespace-nowrap">
                         <div class="flex justify-center gap-5 text-[12px] font-semibold text-gray-700">
                            <button class="flex flex-col items-center gap-1 hover:text-purple-600 transition"

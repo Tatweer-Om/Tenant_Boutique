@@ -55,6 +55,14 @@ document.addEventListener('alpine:init', () => {
           this.processingItems = data.processing || [];
           this.selectedItems = [];
           this.receivedList = [];
+          
+          // Auto-assign original tailor to new items if not already assigned
+          this.newItems.forEach(item => {
+            if (!item.tailor_id && item.originalTailorId) {
+              item.tailor_id = item.originalTailorId;
+              item.tailor_name = this.tailorNameById(item.originalTailorId);
+            }
+          });
         } else {
           throw new Error(data.message || 'Failed to load data');
         }
@@ -157,12 +165,12 @@ document.addEventListener('alpine:init', () => {
 
       // Create a single table with all items, including tailor name in each row
       let rows = this.selectedItems.map((i, idx) => {
-        const tailorName = i.tailor_name || this.tailorNameById(i.tailor_id) || '{{ trans('messages.not_assigned', [], session('locale')) }}';
+        const tailorIdToUse = i.tailor_id || i.originalTailorId;
+        const tailorName = i.tailor_name || this.tailorNameById(tailorIdToUse) || i.originalTailor || '{{ trans('messages.not_assigned', [], session('locale')) }}';
         return `
           <tr>
             <td class="text-center">${idx + 1}</td>
             <td>${i.order_no || ('#' + i.orderId)}</td>
-            <td>${i.customer || '—'}</td>
             <td><strong>${tailorName}</strong></td>
             <td><strong>${i.abayaName || i.code || '—'}</strong><br><small style="color: #666;">{{ trans('messages.code', [], session('locale')) }}: ${i.code || '—'}</small></td>
             <td class="text-center">${i.quantity || 1}</td>
@@ -183,7 +191,6 @@ document.addEventListener('alpine:init', () => {
             <tr>
               <th style="width: 40px;">#</th>
               <th>{{ trans('messages.order_number', [], session('locale')) }}</th>
-              <th>{{ trans('messages.customer', [], session('locale')) }}</th>
               <th>{{ trans('messages.tailor', [], session('locale')) }}</th>
               <th>{{ trans('messages.abaya', [], session('locale')) }}</th>
               <th style="width: 60px;">{{ trans('messages.quantity', [], session('locale')) }}</th>
@@ -443,17 +450,203 @@ document.addEventListener('alpine:init', () => {
 
 
     /* ======================================================================= */
+    /* PRINT SELECTED ITEMS (FOR SENDING TO TAILOR) */
+    /* ======================================================================= */
+    printSelectedItems() {
+      if (this.selectedItems.length === 0) {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'warning',
+            title: '{{ trans('messages.no_items_selected', [], session('locale')) }}',
+            text: '{{ trans('messages.please_select_items_to_print', [], session('locale')) }}'
+          });
+        } else {
+          alert('{{ trans('messages.no_items_selected', [], session('locale')) }}');
+        }
+        return;
+      }
+
+      let w = window.open('', '_blank');
+
+      // Group items by tailor for better organization
+      let itemsByTailor = {};
+      this.selectedItems.forEach(item => {
+        // Use tailor_id if set, otherwise use originalTailorId
+        const tailorIdToUse = item.tailor_id || item.originalTailorId;
+        const tailorName = this.tailorNameById(tailorIdToUse) || item.originalTailor || '{{ trans('messages.not_assigned', [], session('locale')) }}';
+        if (!itemsByTailor[tailorName]) {
+          itemsByTailor[tailorName] = [];
+        }
+        itemsByTailor[tailorName].push(item);
+      });
+
+      // Build content grouped by tailor
+      let content = '';
+      Object.keys(itemsByTailor).forEach(tailorName => {
+        const items = itemsByTailor[tailorName];
+        content += `
+          <div style="margin-bottom: 30px; page-break-inside: avoid;">
+            <h2 style="color: #4f46e5; font-size: 20px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #4f46e5;">
+              {{ trans('messages.tailor', [], session('locale')) }}: ${tailorName}
+            </h2>
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+              <thead>
+                <tr style="background: linear-gradient(to bottom, #f3f4f6, #e5e7eb);">
+                  <th style="border: 1px solid #d1d5db; padding: 10px; text-align: right; width: 40px;">#</th>
+                  <th style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">{{ trans('messages.order_number', [], session('locale')) }}</th>
+                  <th style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">{{ trans('messages.abaya', [], session('locale')) }}</th>
+                  <th style="border: 1px solid #d1d5db; padding: 10px; text-align: center; width: 80px;">{{ trans('messages.quantity', [], session('locale')) }}</th>
+                  <th style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">{{ trans('messages.sizes', [], session('locale')) }}</th>
+                  <th style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">{{ trans('messages.notes', [], session('locale')) }}</th>
+                </tr>
+              </thead>
+              <tbody>
+        `;
+
+        items.forEach((item, idx) => {
+          content += `
+            <tr style="border-bottom: 1px solid #e5e7eb;">
+              <td style="border: 1px solid #e5e7eb; padding: 10px; text-align: center;">${idx + 1}</td>
+              <td style="border: 1px solid #e5e7eb; padding: 10px; text-align: right; font-weight: 600; color: #4f46e5;">
+                ${item.order_no || ('#' + item.orderId)}
+              </td>
+              <td style="border: 1px solid #e5e7eb; padding: 10px; text-align: right;">
+                <strong>${item.abayaName || item.code || '—'}</strong><br>
+                <small style="color: #666;">{{ trans('messages.code', [], session('locale')) }}: ${item.code || '—'}</small>
+              </td>
+              <td style="border: 1px solid #e5e7eb; padding: 10px; text-align: center; font-weight: 600; color: #4f46e5;">
+                ${item.quantity || 1}
+              </td>
+              <td style="border: 1px solid #e5e7eb; padding: 10px; text-align: right; font-size: 12px;">
+                <strong>{{ trans('messages.abaya_length', [], session('locale')) }}:</strong> ${item.length || '—'}<br>
+                <strong>{{ trans('messages.bust_one_side', [], session('locale')) }}:</strong> ${item.bust || '—'}<br>
+                <strong>{{ trans('messages.sleeves_length', [], session('locale')) }}:</strong> ${item.sleeves || '—'}<br>
+                <strong>{{ trans('messages.buttons', [], session('locale')) }}:</strong> ${item.buttons ? '{{ trans('messages.yes', [], session('locale')) }}' : '{{ trans('messages.no', [], session('locale')) }}'}
+              </td>
+              <td style="border: 1px solid #e5e7eb; padding: 10px; text-align: right;">
+                ${item.notes || '—'}
+              </td>
+            </tr>
+          `;
+        });
+
+        content += `
+              </tbody>
+            </table>
+          </div>
+        `;
+      });
+
+      w.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>{{ trans('messages.abayas_to_send_to_tailor', [], session('locale')) }}</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+              padding: 20px; 
+              direction: rtl; 
+              background: #fff;
+              color: #333;
+            }
+            .header {
+              text-align: center;
+              margin-bottom: 30px;
+              padding-bottom: 20px;
+              border-bottom: 3px solid #4f46e5;
+            }
+            .header h1 {
+              color: #4f46e5;
+              font-size: 24px;
+              margin-bottom: 10px;
+            }
+            .header .info {
+              color: #666;
+              font-size: 14px;
+            }
+            table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              font-size: 13px;
+              margin-bottom: 20px;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            }
+            th { 
+              background: linear-gradient(to bottom, #f3f4f6, #e5e7eb);
+              color: #374151;
+              font-weight: 600;
+              padding: 12px 8px;
+              border: 1px solid #d1d5db;
+              text-align: right;
+            }
+            td { 
+              border: 1px solid #e5e7eb;
+              padding: 10px 8px;
+              text-align: right;
+            }
+            tr:nth-child(even) {
+              background-color: #f9fafb;
+            }
+            tr:hover {
+              background-color: #f3f4f6;
+            }
+            .text-center {
+              text-align: center;
+            }
+            @media print {
+              body { padding: 10px; }
+              table { page-break-inside: auto; }
+              tr { page-break-inside: avoid; page-break-after: auto; }
+              thead { display: table-header-group; }
+              tfoot { display: table-footer-group; }
+              @page { margin: 1cm; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>{{ trans('messages.abayas_to_send_to_tailor', [], session('locale')) }}</h1>
+            <div class="info">
+              {{ trans('messages.total_items', [], session('locale')) }}: ${this.selectedItems.length} | 
+              {{ trans('messages.total_quantity', [], session('locale')) }}: ${this.selectedItems.reduce((sum, item) => sum + (item.quantity || 1), 0)} | 
+              {{ trans('messages.printed_on', [], session('locale')) }}: ${new Date().toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'})}
+            </div>
+          </div>
+          ${content}
+        </body>
+        </html>
+      `);
+
+      w.document.close();
+      setTimeout(() => {
+        w.print();
+      }, 250);
+    },
+
+
+    /* ======================================================================= */
     /* SUBMIT SELECTED ITEMS TO TAILOR */
     /* ======================================================================= */
     async submitToTailor() {
       if (this.selectedItems.length === 0) return;
 
+      // Auto-assign original tailor if not set
+      this.selectedItems.forEach(item => {
+        if (!item.tailor_id && item.originalTailorId) {
+          item.tailor_id = item.originalTailorId;
+          item.tailor_name = this.tailorNameById(item.originalTailorId);
+        }
+      });
+
       const assignments = this.selectedItems.map(item => ({
         item_id: item.rowId,
-        tailor_id: item.tailor_id
+        tailor_id: item.tailor_id || item.originalTailorId
       }));
 
-      // Validate all items have tailor selected
+      // Validate all items have tailor selected (either assigned or original)
       if (assignments.some(a => !a.tailor_id)) {
         if (typeof Swal !== 'undefined') {
           Swal.fire({

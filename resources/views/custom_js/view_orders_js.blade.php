@@ -18,7 +18,8 @@ document.addEventListener('alpine:init', () => {
     viewOrder: null,
     paymentOrder: null,
     paymentAmount: '',
-    paymentMethod: 'cash',
+    selectedAccountId: '',
+    accounts: [],
 
     deliverOrder: null,
     selectedReadyIds: [],
@@ -31,6 +32,7 @@ document.addEventListener('alpine:init', () => {
     /* -------- تحميل البيانات من الخادم -------- */
     async init() {
       this.loading = true;
+      await this.loadAccounts();
       try {
         const response = await fetch('{{ url('get_orders_list') }}');
         const data = await response.json();
@@ -62,6 +64,18 @@ document.addEventListener('alpine:init', () => {
         }
       } finally {
         this.loading = false;
+      }
+    },
+
+    async loadAccounts() {
+      try {
+        const response = await fetch('{{ url('accounts/all') }}');
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          this.accounts = data;
+        }
+      } catch (error) {
+        console.error('Error loading accounts:', error);
       }
     },
 
@@ -268,7 +282,7 @@ document.addEventListener('alpine:init', () => {
       this.paymentOrder = order;
       const remaining = order.total - order.paid;
       this.paymentAmount = remaining > 0 ? remaining.toFixed(3) : '';
-      this.paymentMethod = 'cash';
+      this.selectedAccountId = '';
       this.showPaymentModal = true;
     },
 
@@ -292,6 +306,20 @@ document.addEventListener('alpine:init', () => {
         return;
       }
 
+      // Validate account selection
+      if (!this.selectedAccountId) {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'warning',
+            title: '{{ trans('messages.error', [], session('locale')) }}',
+            text: '{{ trans('messages.please_select_account', [], session('locale')) ?: 'Please select an account' }}'
+          });
+        } else {
+          alert('{{ trans('messages.please_select_account', [], session('locale')) ?: 'Please select an account' }}');
+        }
+        return;
+      }
+
       try {
         const response = await fetch('{{ url('record_payment') }}', {
           method: 'POST',
@@ -303,7 +331,7 @@ document.addEventListener('alpine:init', () => {
           body: JSON.stringify({
             order_id: this.paymentOrder.id,
             amount: amount,
-            payment_method: this.paymentMethod
+            account_id: this.selectedAccountId
           })
         });
 

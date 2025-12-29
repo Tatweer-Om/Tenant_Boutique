@@ -511,10 +511,17 @@
           </div>
         </template>
 
-        <button @click="submitToTailor()" 
-                class="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-semibold">
-          {{ trans('messages.send_now', [], session('locale')) }}
-        </button>
+        <div class="mt-4 flex gap-3">
+          <button @click="printSelectedItems()" 
+                  class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-2">
+            <span class="material-symbols-outlined">print</span>
+            {{ trans('messages.print', [], session('locale')) }}
+          </button>
+          <button @click="submitToTailor()" 
+                  class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-semibold">
+            {{ trans('messages.send_now', [], session('locale')) }}
+          </button>
+        </div>
 
       </div>
 

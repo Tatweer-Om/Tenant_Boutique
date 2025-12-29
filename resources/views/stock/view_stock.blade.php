@@ -142,13 +142,10 @@
             <table class="w-full text-sm min-w-full">
                 <thead class="bg-gradient-to-l from-pink-50 to-pink-100 text-gray-800 sticky top-0 z-10">
                     <tr>
-                        <th class="text-right px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[100px]">{{ trans('messages.image', [], session('locale')) }}</th>
-                        <th class="text-right px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[120px]">{{ trans('messages.code', [], session('locale')) }}</th>
-                        <th class="text-right px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[150px]">{{ trans('messages.type', [], session('locale')) }}</th>
-                        <th class="text-right px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[120px]">{{ trans('messages.category', [], session('locale')) }}</th>
-                        <th class="text-right px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[100px]">{{ trans('messages.size', [], session('locale')) }}</th>
-                        <th class="text-right px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[100px]">{{ trans('messages.color', [], session('locale')) }}</th>
-                        <th class="text-right px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[100px]">{{ trans('messages.quantity', [], session('locale')) }}</th>
+                        <th class="text-center px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[200px]">{{ trans('messages.image', [], session('locale')) }} / {{ trans('messages.design_name', [], session('locale')) }}</th>
+                        <th class="text-center px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[100px]">{{ trans('messages.size', [], session('locale')) }}</th>
+                        <th class="text-center px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[100px]">{{ trans('messages.color', [], session('locale')) }}</th>
+                        <th class="text-center px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[100px]">{{ trans('messages.quantity', [], session('locale')) }}</th>
                         <th class="text-center px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[200px]">{{ trans('messages.actions', [], session('locale')) }}</th>
                     </tr>
                 </thead>

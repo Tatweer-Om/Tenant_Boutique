@@ -498,7 +498,7 @@ public function recordPayment(Request $request)
     try {
         $orderId = $request->input('order_id');
         $amount = $request->input('amount');
-        $paymentMethod = $request->input('payment_method', 'cash');
+        $accountId = $request->input('account_id');
 
         $order = SpecialOrder::findOrFail($orderId);
         
@@ -512,7 +512,16 @@ public function recordPayment(Request $request)
             ], 422);
         }
 
+        // Validate account_id is provided
+        if (!$accountId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Account is required'
+            ], 422);
+        }
+
         $order->paid_amount = $newPaidAmount;
+        $order->account_id = $accountId;
         
         // If fully paid and not delivered, set status to ready
         if (abs($order->total_amount - $newPaidAmount) < 0.001 && $order->status !== 'delivered') {
@@ -622,6 +631,7 @@ public function getTailorAssignmentsData(Request $request)
 
                 // Get original tailor from stock if exists
         $originalTailor = '';
+        $originalTailorId = null;
 
         if ($stock && $stock->tailor_id) {
 
@@ -631,6 +641,11 @@ public function getTailorAssignmentsData(Request $request)
             // Ensure always an array
             if (!is_array($tailorIds)) {
                 $tailorIds = [$tailorIds];
+            }
+
+            // Get first tailor ID for auto-assignment
+            if (!empty($tailorIds)) {
+                $originalTailorId = is_numeric($tailorIds[0]) ? (int)$tailorIds[0] : null;
             }
 
     // Fetch all tailors
@@ -664,6 +679,7 @@ public function getTailorAssignmentsData(Request $request)
                     'notes' => $item->notes ?? '',
                     'date' => $order->created_at->format('Y-m-d'),
                     'originalTailor' => $originalTailor,
+                    'originalTailorId' => $originalTailorId,
                     'tailor_id' => null,
                     'tailor' => '',
                     'status' => 'new',
@@ -685,9 +701,26 @@ public function getTailorAssignmentsData(Request $request)
 
                 // Get original tailor from stock if exists
                 $originalTailor = '';
+                $originalTailorId = null;
                 if ($stock && $stock->tailor_id) {
-                    $tailor = Tailor::find($stock->tailor_id);
-                    $originalTailor = $tailor ? $tailor->tailor_name : '';
+                    // Convert JSON string to PHP array
+                    $tailorIds = json_decode($stock->tailor_id, true);
+
+                    // Ensure always an array
+                    if (!is_array($tailorIds)) {
+                        $tailorIds = [$tailorIds];
+                    }
+
+                    // Get first tailor ID for reference
+                    if (!empty($tailorIds)) {
+                        $originalTailorId = is_numeric($tailorIds[0]) ? (int)$tailorIds[0] : null;
+                    }
+
+                    // Fetch all tailors
+                    $tailors = Tailor::whereIn('id', $tailorIds)->pluck('tailor_name')->toArray();
+
+                    // Join names into a single string
+                    $originalTailor = implode(', ', $tailors);
                 }
 
                 // Generate order number in same format as view_special_order: YYYY-00ID
@@ -716,6 +749,7 @@ public function getTailorAssignmentsData(Request $request)
     ? \Carbon\Carbon::parse($item->sent_to_tailor_at)->format('Y-m-d')
     : \Carbon\Carbon::parse($order->created_at)->format('Y-m-d'),
                     'originalTailor' => $originalTailor,
+                    'originalTailorId' => $originalTailorId,
                     'tailor_id' => $item->tailor_id,
                     'tailor' => $item->tailor ? $item->tailor->tailor_name : '',
                     'tailor_name' => $item->tailor ? $item->tailor->tailor_name : '',

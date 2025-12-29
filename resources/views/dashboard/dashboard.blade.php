@@ -257,15 +257,17 @@
                     <table class="w-full text-sm">
                         <thead>
                             <tr class="text-xs text-gray-500">
-                                <th class="text-right py-2">{{ trans('messages.branch', [], session('locale')) }}</th>
-                                <th class="text-right py-2">{{ trans('messages.amount', [], session('locale')) }}</th>
-                                <th class="text-right py-2">{{ trans('messages.due_date', [], session('locale')) }}</th>
-                                <th class="text-right py-2">{{ trans('messages.status', [], session('locale')) }}</th>
+                                <th class="text-center py-2">{{ trans('messages.branch', [], session('locale')) }}</th>
+                                <th class="text-center py-2">{{ trans('messages.month', [], session('locale')) }}</th>
+                                <th class="text-center py-2">{{ trans('messages.amount', [], session('locale')) }}</th>
+                                <th class="text-center py-2">{{ trans('messages.payment_date', [], session('locale')) }}</th>
+                                <th class="text-center py-2">{{ trans('messages.days_remaining', [], session('locale')) ?: 'Days Remaining' }}</th>
+                                <th class="text-center py-2">{{ trans('messages.status', [], session('locale')) }}</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-[var(--border)]" id="boutiqueRentRemindersList">
                             <tr>
-                                <td colspan="4" class="py-4 text-center text-gray-500">{{ trans('messages.loading', [], session('locale')) }}...</td>
+                                <td colspan="6" class="py-4 text-center text-gray-500">{{ trans('messages.loading', [], session('locale')) }}...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -320,13 +322,13 @@
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="text-xs text-gray-500 bg-gray-50">
-                            <th class="py-3 px-4 text-right">{{ trans('messages.order_number', [], session('locale')) }}</th>
-                            <th class="py-3 px-4 text-right">{{ trans('messages.source', [], session('locale')) }}</th>
-                            <th class="py-3 px-4 text-right">{{ trans('messages.customer', [], session('locale')) }}</th>
-                            <th class="py-3 px-4 text-right">{{ trans('messages.status', [], session('locale')) }}</th>
-                            <th class="py-3 px-4 text-right">{{ trans('messages.date', [], session('locale')) }}</th>
-                            <th class="py-3 px-4 text-right">{{ trans('messages.total', [], session('locale')) }}</th>
-                            <th class="py-3 px-4 text-right">{{ trans('messages.actions', [], session('locale')) }}</th>
+                            <th class="py-3 px-4 text-center">{{ trans('messages.order_number', [], session('locale')) }}</th>
+                            <th class="py-3 px-4 text-center">{{ trans('messages.source', [], session('locale')) }}</th>
+                            <th class="py-3 px-4 text-center">{{ trans('messages.customer', [], session('locale')) }}</th>
+                            <th class="py-3 px-4 text-center">{{ trans('messages.status', [], session('locale')) }}</th>
+                            <th class="py-3 px-4 text-center">{{ trans('messages.date', [], session('locale')) }}</th>
+                            <th class="py-3 px-4 text-center">{{ trans('messages.total', [], session('locale')) }}</th>
+                            <th class="py-3 px-4 text-center">{{ trans('messages.actions', [], session('locale')) }}</th>
                         </tr>
                     </thead>
 
@@ -652,24 +654,50 @@
                         let statusClass = '';
                         let statusIcon = '';
                         
-                        if (reminder.status === 'late') {
-                            statusClass = 'background: var(--dangerSoft); color: var(--danger);';
-                            statusIcon = 'error';
-                        } else if (reminder.status === 'soon') {
+                        if (reminder.status === 'unpaid') {
+                            statusClass = 'background: rgba(239, 68, 68, 0.1); color: #ef4444;';
+                            statusIcon = 'cancel';
+                        } else if (reminder.status === 'pending') {
                             statusClass = 'background: var(--warnSoft); color: var(--warn);';
                             statusIcon = 'schedule';
+                        } else if (reminder.status === 'upcoming') {
+                            statusClass = 'background: rgba(59, 130, 246, 0.1); color: #3b82f6;';
+                            statusIcon = 'event';
+                        } else if (reminder.status === 'paid') {
+                            statusClass = 'background: var(--okSoft); color: var(--ok);';
+                            statusIcon = 'check_circle';
                         } else {
                             statusClass = 'background: var(--okSoft); color: var(--ok);';
                             statusIcon = 'check_circle';
                         }
                         
+                        let daysRemainingText = '-';
+                        if (reminder.days_remaining !== null && reminder.days_remaining !== undefined) {
+                            // Ensure days_remaining is an integer and at least 1 if positive
+                            let days = Math.max(1, Math.ceil(reminder.days_remaining));
+                            
+                            if (reminder.days_remaining <= 0) {
+                                // For overdue payments, show absolute value
+                                days = Math.abs(Math.floor(reminder.days_remaining));
+                                daysRemainingText = `${days} {{ trans("messages.days_overdue", [], session("locale")) ?: "days overdue" }}`;
+                            } else if (days === 0 || reminder.days_remaining === 0) {
+                                daysRemainingText = '{{ trans("messages.today", [], session("locale")) }}';
+                            } else if (days === 1 && reminder.days_remaining <= 1) {
+                                daysRemainingText = '{{ trans("messages.tomorrow", [], session("locale")) ?: "Tomorrow" }}';
+                            } else {
+                                daysRemainingText = `${days} {{ trans("messages.days", [], session("locale")) ?: "days" }}`;
+                            }
+                        }
+                        
                         return `
                             <tr>
-                                <td class="py-3 font-semibold">${reminder.boutique_name}</td>
-                                <td class="py-3">${reminder.amount.toFixed(3)} ر.ع</td>
-                                <td class="py-3">${reminder.due_date_formatted}</td>
-                                <td class="py-3">
-                                    <span class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full" style="${statusClass}">
+                                <td class="py-3 font-semibold text-center">${reminder.boutique_name}</td>
+                                <td class="py-3 text-center text-gray-700">${reminder.month_name || reminder.month}</td>
+                                <td class="py-3 text-center">${reminder.amount.toFixed(3)} ر.ع</td>
+                                <td class="py-3 text-center text-gray-600">${reminder.payment_date_formatted}</td>
+                                <td class="py-3 text-center text-gray-600">${daysRemainingText}</td>
+                                <td class="py-3 text-center">
+                                    <span class="inline-flex items-center justify-center gap-1 text-xs px-2 py-1 rounded-full" style="${statusClass}">
                                         <span class="material-symbols-outlined text-[16px]">${statusIcon}</span> ${reminder.status_text}
                                     </span>
                                 </td>
@@ -677,13 +705,13 @@
                         `;
                     }).join('');
                 } else {
-                    container.innerHTML = `<tr><td colspan="4" class="py-4 text-center text-gray-500">{{ trans('messages.no_rent_reminders', [], session('locale')) ?: 'No rent reminders' }}</td></tr>`;
+                    container.innerHTML = `<tr><td colspan="6" class="py-4 text-center text-gray-500">{{ trans('messages.no_rent_reminders', [], session('locale')) ?: 'No rent reminders' }}</td></tr>`;
                 }
             } catch (error) {
                 console.error('Error loading boutique rent reminders:', error);
                 const container = document.getElementById('boutiqueRentRemindersList');
                 if (container) {
-                    container.innerHTML = `<tr><td colspan="4" class="py-4 text-center text-red-500">{{ trans('messages.error_loading_data', [], session('locale')) }}</td></tr>`;
+                    container.innerHTML = `<tr><td colspan="6" class="py-4 text-center text-red-500">{{ trans('messages.error_loading_data', [], session('locale')) }}</td></tr>`;
                 }
             }
         }
@@ -715,29 +743,29 @@
                     container.innerHTML = data.orders.map(order => {
                         return `
                             <tr class="hover:bg-gray-50 transition">
-                                <td class="py-3 px-4 font-semibold">${order.order_no}</td>
-                                <td class="py-3 px-4">
-                                    <span class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full" style="${order.source_info.class}">
+                                <td class="py-3 px-4 font-semibold text-center">${order.order_no}</td>
+                                <td class="py-3 px-4 text-center">
+                                    <span class="inline-flex items-center justify-center gap-1 text-xs px-2 py-1 rounded-full" style="${order.source_info.class}">
                                         <span class="material-symbols-outlined text-[14px]">${order.source_info.icon}</span>
                                         ${order.source_info.text}
                                     </span>
                                 </td>
-                                <td class="py-3 px-4">
+                                <td class="py-3 px-4 text-center">
                                     <div class="font-medium">${order.customer_name}</div>
                                     <div class="text-xs text-gray-500">${order.customer_phone}</div>
                                 </td>
-                                <td class="py-3 px-4">
-                                    <span class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full" style="${order.status_info.class}">
+                                <td class="py-3 px-4 text-center">
+                                    <span class="inline-flex items-center justify-center gap-1 text-xs px-2 py-1 rounded-full" style="${order.status_info.class}">
                                         <span class="material-symbols-outlined text-[14px]">${order.status_info.icon}</span>
                                         ${order.status_info.text}
                                     </span>
                                 </td>
-                                <td class="py-3 px-4 text-gray-600">${order.date_formatted}</td>
-                                <td class="py-3 px-4 font-bold">${order.total.toFixed(3)} {{ trans('messages.currency', [], session('locale')) }}</td>
-                                <td class="py-3 px-4">
+                                <td class="py-3 px-4 text-gray-600 text-center">${order.date_formatted}</td>
+                                <td class="py-3 px-4 font-bold text-center">${order.total.toFixed(3)} {{ trans('messages.currency', [], session('locale')) }}</td>
+                                <td class="py-3 px-4 text-center">
                                     <button
                                         onclick="printSpecialOrderBill(${order.id})"
-                                        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs hover:bg-gray-100 transition">
+                                        class="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs hover:bg-gray-100 transition">
                                         <span class="material-symbols-outlined text-[16px]">print</span>
                                         {{ trans('messages.print', [], session('locale')) }}
                                     </button>

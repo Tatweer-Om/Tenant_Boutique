@@ -15,6 +15,7 @@ use App\Models\StockColor;
 use App\Models\StockSize;
 use App\Models\Boutique;
 use App\Models\BoutiqueInvo;
+use App\Models\Settings;
 
 class HomeController extends Controller
 {
@@ -328,77 +329,118 @@ class HomeController extends Controller
                     continue;
                 }
                 
-                // Calculate next due date (same day of month)
-                $nextDueDate = Carbon::create($now->year, $now->month, $rentDate->day);
+                // Extract day from rent_date (ignoring year)
+                $paymentDay = $rentDate->day;
                 
-                // If the day has passed this month, move to next month
-                if ($nextDueDate->lt($now)) {
-                    $nextDueDate->addMonth();
-                }
+                // Calculate notification day (10 days before payment day)
+                // If result is <= 0, use 1st of the month
+                $notificationDay = max(1, $paymentDay - 10);
                 
-                $daysUntilDue = $now->diffInDays($nextDueDate, false);
-                
-                // Check if there's an unpaid invoice for current or previous months
-                $currentMonth = $now->format('Y-m');
-                $unpaidInvoice = BoutiqueInvo::where('boutique_id', (string)$boutique->id)
-                    ->where('status', '5') // 5 = unpaid
-                    ->orderBy('month', 'DESC')
-                    ->first();
-                
-                // Check if boutique has unpaid rent status
-                $hasUnpaidRent = ($boutique->rent_invoice_status == '5');
-                
-                // Determine status
-                $status = 'paid';
-                $statusClass = 'ok';
-                $statusText = trans('messages.paid', [], session('locale'));
-                
-                // If there's an unpaid invoice or boutique status is unpaid
-                if ($unpaidInvoice || $hasUnpaidRent) {
-                    if ($daysUntilDue < 0) {
-                        // Past due
-                        $status = 'late';
-                        $statusClass = 'danger';
-                        $statusText = trans('messages.late', [], session('locale'));
-                    } else if ($daysUntilDue <= 7) {
-                        // Due soon (within 7 days)
-                        $status = 'soon';
-                        $statusClass = 'warn';
-                        $statusText = trans('messages.soon', [], session('locale'));
+                // Generate reminders for previous month, current month, and next 2 months
+                for ($i = -1; $i < 3; $i++) {
+                    $currentMonth = $now->copy()->addMonths($i);
+                    $monthKey = $currentMonth->format('Y-m');
+                    $monthName = $currentMonth->format('F Y');
+                    
+                    // Calculate payment date for this month (same day, current month)
+                    $paymentDate = Carbon::create($currentMonth->year, $currentMonth->month, $paymentDay);
+                    // If payment day doesn't exist in this month (e.g., Feb 30), use last day of month
+                    if ($paymentDate->day != $paymentDay) {
+                        $paymentDate = $currentMonth->copy()->endOfMonth();
+                    }
+                    
+                    // Calculate notification date for this month (notification day of current month)
+                    $notificationDate = Carbon::create($currentMonth->year, $currentMonth->month, $notificationDay);
+                    
+                    // Get invoice for this month
+                    $invoice = BoutiqueInvo::where('boutique_id', (string)$boutique->id)
+                        ->where('month', $monthKey)
+                        ->first();
+                    
+                    // Determine status
+                    $status = 'upcoming';
+                    $statusClass = 'ok';
+                    $statusText = trans('messages.upcoming', [], session('locale')) ?: 'Upcoming';
+                    $daysRemaining = null;
+                    
+                    if ($invoice) {
+                        if ($invoice->status == '4') {
+                            // Paid
+                            $status = 'paid';
+                            $statusClass = 'ok';
+                            $statusText = trans('messages.paid', [], session('locale'));
+                        } else if ($invoice->status == '5') {
+                            // Unpaid
+                            $status = 'unpaid';
+                            $statusClass = 'danger';
+                            $statusText = trans('messages.unpaid', [], session('locale'));
+                        } else {
+                            // Pending
+                            $status = 'pending';
+                            $statusClass = 'warn';
+                            $statusText = trans('messages.pending', [], session('locale')) ?: 'Pending';
+                        }
                     } else {
-                        // Unpaid but not due yet
-                        $status = 'unpaid';
-                        $statusClass = 'warn';
-                        $statusText = trans('messages.unpaid', [], session('locale'));
+                        // No invoice yet - check if it's time to show notification
+                        $daysUntilNotification = $now->diffInDays($notificationDate, false);
+                        $daysUntilPayment = $now->diffInDays($paymentDate, false);
+                        
+                        if ($daysUntilPayment < 0) {
+                            // Payment date has passed - show as unpaid
+                            $status = 'unpaid';
+                            $statusClass = 'danger';
+                            $statusText = trans('messages.unpaid', [], session('locale'));
+                        } else if ($daysUntilNotification <= 0 && $daysUntilPayment >= 0) {
+                            // Within notification period
+                            $status = 'upcoming';
+                            $statusClass = 'warn';
+                            $statusText = trans('messages.upcoming', [], session('locale')) ?: 'Upcoming';
+                            // Round up to at least 1 day if less than 1
+                            $daysRemaining = max(1, (int)ceil($daysUntilPayment));
+                        } else if ($daysUntilNotification > 0) {
+                            // Too early to show
+                            continue;
+                        }
                     }
-                } else {
-                    // Check if due date is within 7 days (even if paid, show as reminder)
-                    if ($daysUntilDue <= 7 && $daysUntilDue >= 0) {
-                        $status = 'soon';
-                        $statusClass = 'warn';
-                        $statusText = trans('messages.soon', [], session('locale'));
+                    
+                    // Include if it's unpaid, pending, paid, or within notification period
+                    // Always show unpaid and pending
+                    // Show paid only if it's current or previous month
+                    // Show upcoming only if within notification period
+                    $shouldInclude = false;
+                    
+                    if ($status === 'unpaid' || $status === 'pending') {
+                        $shouldInclude = true;
+                    } else if ($status === 'paid' && ($i <= 1)) {
+                        // Show paid for current month and previous month
+                        $shouldInclude = true;
+                    } else if ($status === 'upcoming' && $daysRemaining !== null) {
+                        $shouldInclude = true;
                     }
-                }
-                
-                // Include if unpaid, late, or due soon (within 7 days)
-                if ($status !== 'paid') {
-                    $reminders[] = [
-                        'id' => $boutique->id,
-                        'boutique_name' => $boutique->boutique_name,
-                        'amount' => $monthlyRent,
-                        'due_date' => $nextDueDate->format('Y-m-d'),
-                        'due_date_formatted' => $nextDueDate->format('d/m/Y'),
-                        'days_until_due' => $daysUntilDue,
-                        'status' => $status,
-                        'status_class' => $statusClass,
-                        'status_text' => $statusText,
-                    ];
+                    
+                    if ($shouldInclude) {
+                        $reminders[] = [
+                            'id' => $boutique->id,
+                            'boutique_name' => $boutique->boutique_name,
+                            'amount' => $monthlyRent,
+                            'month' => $monthKey,
+                            'month_name' => $monthName,
+                            'payment_date' => $paymentDate->format('Y-m-d'),
+                            'payment_date_formatted' => $paymentDate->format('d/m/Y'),
+                            'notification_date' => $notificationDate->format('Y-m-d'),
+                            'notification_date_formatted' => $notificationDate->format('d/m/Y'),
+                            'days_remaining' => $daysRemaining,
+                            'status' => $status,
+                            'status_class' => $statusClass,
+                            'status_text' => $statusText,
+                        ];
+                    }
                 }
             }
             
-            // Sort by due date (earliest first)
+            // Sort by payment date (earliest first)
             usort($reminders, function($a, $b) {
-                return strtotime($a['due_date']) <=> strtotime($b['due_date']);
+                return strtotime($a['payment_date']) <=> strtotime($b['payment_date']);
             });
             
             return response()->json([
@@ -553,5 +595,99 @@ class HomeController extends Controller
             'class' => 'background: rgba(107,114,128,.12); color: var(--muted);',
             'icon' => 'info'
         ];
+    }
+    
+    public function getNotifications()
+    {
+        try {
+            $notifications = [];
+            $now = Carbon::now();
+            
+            // Get late delivery weeks from settings (default to 2 weeks)
+            $settings = Settings::getSettings();
+            $lateDeliveryWeeks = $settings->late_delivery_weeks ?? 2;
+            $lateDeliveryDate = $now->copy()->subWeeks($lateDeliveryWeeks);
+            
+            // 1. Get stock items with quantity <= 2
+            $lowStockItems = Stock::where('quantity', '<=', 2)
+                ->where('quantity', '>', 0)
+                ->with('category')
+                ->get();
+            
+            foreach ($lowStockItems as $stock) {
+                $categoryName = $stock->category ? 
+                    (session('locale') === 'ar' ? $stock->category->category_name_ar : $stock->category->category_name_en) : 
+                    'N/A';
+                
+                $stockName = $stock->design_name ?? $stock->abaya_code ?? 'N/A';
+                $quantityText = str_replace(':quantity', (string)$stock->quantity, trans('messages.remaining_quantity_pieces', [], session('locale')));
+                
+                $notifications[] = [
+                    'type' => 'low_stock',
+                    'icon' => 'inventory',
+                    'iconColor' => 'text-amber-500',
+                    'title' => trans('messages.low_abaya_stock', [], session('locale')),
+                    'message' => $stockName . ' (' . $categoryName . ') - ' . $quantityText,
+                    'time' => $stock->updated_at ? $stock->updated_at->diffForHumans() : '',
+                    'link' => url('view_stock')
+                ];
+            }
+            
+            // 2. Get special orders that are not delivered and created more than X weeks ago
+            $delayedOrders = SpecialOrder::where('status', '!=', 'delivered')
+                ->where('created_at', '<=', $lateDeliveryDate)
+                ->with(['customer', 'items'])
+                ->get();
+            
+            foreach ($delayedOrders as $order) {
+                $orderDate = Carbon::parse($order->created_at);
+                $daysAgo = $now->diffInDays($orderDate);
+                $weeksAgo = floor($daysAgo / 7);
+                $remainingDays = $daysAgo % 7;
+                
+                // Generate order number
+                $orderNumber = $orderDate->format('Y') . '-' . str_pad($order->id, 4, '0', STR_PAD_LEFT);
+                
+                $customerName = $order->customer ? $order->customer->name : 'N/A';
+                
+                // Build time ago text
+                $timeAgoText = '';
+                if ($weeksAgo > 0) {
+                    $timeAgoText = $weeksAgo . ' ' . trans('messages.weeks', [], session('locale')) . ' ';
+                }
+                if ($remainingDays > 0) {
+                    $timeAgoText .= $remainingDays . ' ' . trans('messages.days', [], session('locale')) . ' ';
+                }
+                $timeAgoText .= trans('messages.ago', [], session('locale'));
+                
+                $notifications[] = [
+                    'type' => 'delayed_order',
+                    'icon' => 'schedule',
+                    'iconColor' => 'text-red-500',
+                    'title' => trans('messages.abaya_delayed_delivery', [], session('locale')),
+                    'message' => trans('messages.order', [], session('locale')) . ' #' . $orderNumber . ' - ' . $customerName . ' - ' . $timeAgoText,
+                    'time' => $order->created_at->diffForHumans(),
+                    'link' => url('view_special_order')
+                ];
+            }
+            
+            // Sort by creation time (newest first)
+            usort($notifications, function($a, $b) {
+                return strtotime($b['time']) <=> strtotime($a['time']);
+            });
+            
+            return response()->json([
+                'success' => true,
+                'notifications' => $notifications,
+                'count' => count($notifications)
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error fetching notifications: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'notifications' => [],
+                'count' => 0
+            ]);
+        }
     }
 }

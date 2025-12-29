@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Category;
 use App\Models\Stock;
 use App\Models\Customer;
+use App\Models\Color;
+use App\Models\Size;
 use App\Models\PosOrders;
 use App\Models\PosOrdersDetail;
 use App\Models\PosPayment;
@@ -13,6 +15,8 @@ use App\Models\Area;
 use App\Models\City;
 use App\Models\ColorSize;
 use App\Models\Account;
+use App\Models\Channel;
+use App\Models\ChannelStock;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
@@ -23,11 +27,37 @@ class PosController extends Controller
         // Fetch all categories
         $categories = Category::orderBy('id', 'ASC')->get();
         
-        // Fetch all stocks (abayas) with their images and category
-        $stocks = Stock::with(['images', 'category'])
-            ->whereNotNull('category_id')
-            ->orderBy('id', 'DESC')
-            ->get();
+        // Get selected channel from session
+        $selectedChannelId = session('pos_selected_channel_id', null);
+        
+        // Fetch stocks based on selected channel
+        if ($selectedChannelId) {
+            // Get stock IDs that exist in this channel (only valid stock_ids)
+            $channelStockIds = ChannelStock::where('location_type', 'channel')
+                ->where('location_id', $selectedChannelId)
+                ->whereNotNull('stock_id')
+                ->distinct()
+                ->pluck('stock_id')
+                ->toArray();
+            
+            // Fetch only stocks that are in the channel
+            if (!empty($channelStockIds)) {
+                $stocks = Stock::with(['images', 'category'])
+                    ->whereNotNull('category_id')
+                    ->whereIn('id', $channelStockIds)
+                    ->orderBy('id', 'DESC')
+                    ->get();
+            } else {
+                // No stocks in this channel
+                $stocks = collect([]);
+            }
+        } else {
+            // Fetch all stocks if no channel selected
+            $stocks = Stock::with(['images', 'category'])
+                ->whereNotNull('category_id')
+                ->orderBy('id', 'DESC')
+                ->get();
+        }
 
         // Areas for delivery selects
         $areas = Area::orderBy('area_name_ar', 'ASC')->get(['id','area_name_ar','area_name_en']);
@@ -36,7 +66,13 @@ class PosController extends Controller
         $cities = City::orderBy('city_name_ar', 'ASC')
             ->get(['id','city_name_ar','city_name_en','delivery_charges','area_id']);
         
-        return view('pos.pos_page', compact('categories', 'stocks', 'areas', 'cities'));
+        // Get selected channel information for header display
+        $selectedChannel = null;
+        if ($selectedChannelId) {
+            $selectedChannel = Channel::find($selectedChannelId);
+        }
+        
+        return view('pos.pos_page', compact('categories', 'stocks', 'areas', 'cities', 'selectedChannel'));
     }
 
     public function getStockDetails($id)
@@ -48,24 +84,77 @@ class PosController extends Controller
             'category'
         ])->findOrFail($id);
 
+        // Get selected channel from session
+        $selectedChannelId = session('pos_selected_channel_id', null);
+        
         $colorSizes = [];
-        foreach ($stock->colorSizes as $item) {
-            $sizeName = session('locale') === 'ar' 
-                ? ($item->size?->size_name_ar ?? '-') 
-                : ($item->size?->size_name_en ?? '-');
+        
+        // If channel is selected, filter by channel stock
+        if ($selectedChannelId) {
+            // Get channel stock items for this stock
+            $channelStocks = ChannelStock::where('location_type', 'channel')
+                ->where('location_id', $selectedChannelId)
+                ->where('stock_id', $id)
+                ->get();
             
-            $colorName = session('locale') === 'ar' 
-                ? ($item->color?->color_name_ar ?? '-') 
-                : ($item->color?->color_name_en ?? '-');
-            
-            $colorSizes[] = [
-                'size_id' => $item->size_id,
-                'size_name' => $sizeName,
-                'color_id' => $item->color_id,
-                'color_name' => $colorName,
-                'color_code' => $item->color?->color_code ?? '#000000',
-                'quantity' => $item->qty ?? 0,
-            ];
+            // Build color/size combinations from channel stock
+            foreach ($channelStocks as $channelStock) {
+                $sizeId = $channelStock->size_id;
+                $colorId = $channelStock->color_id;
+                
+                // Get size name
+                $sizeName = $channelStock->size_name;
+                if (!$sizeName && $sizeId) {
+                    $size = Size::find($sizeId);
+                    $sizeName = session('locale') === 'ar' 
+                        ? ($size?->size_name_ar ?? '-') 
+                        : ($size?->size_name_en ?? '-');
+                }
+                
+                // Get color name and code
+                $colorName = $channelStock->color_name;
+                $colorCode = '#000000';
+                if ($colorId) {
+                    $color = Color::find($colorId);
+                    if ($color) {
+                        if (!$colorName) {
+                            $colorName = session('locale') === 'ar' 
+                                ? ($color->color_name_ar ?? '-') 
+                                : ($color->color_name_en ?? '-');
+                        }
+                        $colorCode = $color->color_code ?? '#000000';
+                    }
+                }
+                
+                $colorSizes[] = [
+                    'size_id' => $sizeId,
+                    'size_name' => $sizeName ?? '-',
+                    'color_id' => $colorId,
+                    'color_name' => $colorName ?? '-',
+                    'color_code' => $colorCode,
+                    'quantity' => $channelStock->quantity ?? 0,
+                ];
+            }
+        } else {
+            // No channel selected - show all color/size combinations from main stock
+            foreach ($stock->colorSizes as $item) {
+                $sizeName = session('locale') === 'ar' 
+                    ? ($item->size?->size_name_ar ?? '-') 
+                    : ($item->size?->size_name_en ?? '-');
+                
+                $colorName = session('locale') === 'ar' 
+                    ? ($item->color?->color_name_ar ?? '-') 
+                    : ($item->color?->color_name_en ?? '-');
+                
+                $colorSizes[] = [
+                    'size_id' => $item->size_id,
+                    'size_name' => $sizeName,
+                    'color_id' => $item->color_id,
+                    'color_name' => $colorName,
+                    'color_code' => $item->color?->color_code ?? '#000000',
+                    'quantity' => $item->qty ?? 0,
+                ];
+            }
         }
 
         return response()->json([
@@ -95,7 +184,7 @@ class PosController extends Controller
             })
             ->orderBy('id', 'DESC')
             ->limit(10)
-            ->get(['id', 'name', 'phone', 'city_id', 'area_id']);
+            ->get(['id', 'name', 'phone', 'city_id', 'area_id', 'address']);
 
         return response()->json($customers);
     }
@@ -622,6 +711,75 @@ class PosController extends Controller
             'orderDetails' => $orderDetails,
             'payments' => $payments,
             'customer' => $order->customer,
+        ]);
+    }
+
+    /**
+     * Get active channels for POS (where status_for_pos = 1)
+     */
+    public function getActiveChannels()
+    {
+        $selectedChannelId = session('pos_selected_channel_id', null);
+        
+        $channels = Channel::where('status_for_pos', 1)
+            ->orderBy('id', 'ASC')
+            ->get(['id', 'channel_name_ar', 'channel_name_en', 'status_for_pos']);
+
+        return response()->json([
+            'success' => true,
+            'channels' => $channels,
+            'selected_channel_id' => $selectedChannelId
+        ]);
+    }
+
+    /**
+     * Select/clear channel for POS stock filtering
+     */
+    public function selectChannel(Request $request)
+    {
+        $channelId = $request->input('channel_id');
+        
+        if ($channelId === null || $channelId === '') {
+            // Clear selected channel
+            session()->forget('pos_selected_channel_id');
+            return response()->json([
+                'success' => true,
+                'message' => trans('messages.channel_cleared', [], session('locale', 'en')),
+                'selected_channel_id' => null
+            ]);
+        }
+        
+        // Validate channel exists and is active for POS
+        $channel = Channel::where('id', $channelId)
+            ->where('status_for_pos', 1)
+            ->first();
+        
+        if (!$channel) {
+            return response()->json([
+                'success' => false,
+                'message' => trans('messages.channel_not_found', [], session('locale', 'en'))
+            ], 404);
+        }
+        
+        // Store selected channel in session
+        session(['pos_selected_channel_id' => $channelId]);
+        
+        // Get stock count for this channel (distinct stock_ids)
+        $stockCount = ChannelStock::where('location_type', 'channel')
+            ->where('location_id', $channelId)
+            ->whereNotNull('stock_id')
+            ->distinct()
+            ->pluck('stock_id')
+            ->count();
+        
+        return response()->json([
+            'success' => true,
+            'message' => trans('messages.channel_selected', [], session('locale', 'en')),
+            'selected_channel_id' => $channelId,
+            'channel_name' => session('locale') === 'ar' 
+                ? ($channel->channel_name_ar ?? $channel->channel_name_en)
+                : ($channel->channel_name_en ?? $channel->channel_name_ar),
+            'stock_count' => $stockCount
         ]);
     }
 }

@@ -28,14 +28,22 @@ $(document).ready(function() {
 
             tableRows += `
                 <tr class="border-t hover:bg-pink-50/60 transition" data-id="${material.id}">
-                    <td class="px-3 py-3"><img src="${image}" class="w-12 h-16 object-cover rounded-md" /></td>
-                    <td class="px-3 py-3 font-bold">${material.material_name}</td>
-                    <td class="px-3 py-3">${material.unit ?? '-'}</td>
-                    <td class="px-3 py-3">${material.category ?? '-'}</td>
-                    <td class="px-3 py-3 font-bold">${material.rolls_count ?? '-'}</td>
-                    <td class="px-3 py-3 font-bold">${material.meters_per_roll ?? '-'}</td>
-                    <td class="px-3 py-3 font-bold">${material.sell_price ?? '-'}</td>
-                    <td class="px-3 py-3">${material.buy_price ?? '-'}</td>
+                    <td class="px-3 py-3 text-center">
+                        <div class="flex items-center justify-center gap-3">
+                            <img src="${image}" class="w-12 h-16 object-cover rounded-md" />
+                            <span class="font-bold">${material.material_name}</span>
+                        </div>
+                    </td>
+                    <td class="px-3 py-3 text-center">
+                        <div class="flex flex-col items-center">
+                            <span>${trans.unit}: ${material.unit ?? '-'}</span>
+                            <span>${trans.category}: ${material.category ?? '-'}</span>
+                        </div>
+                    </td>
+                    <td class="px-3 py-3 text-center font-bold">${material.rolls_count ?? '-'}</td>
+                    <td class="px-3 py-3 text-center font-bold">${material.meters_per_roll ?? '-'}</td>
+                    <td class="px-3 py-3 text-center font-bold">${material.sell_price ?? '-'}</td>
+                    <td class="px-3 py-3 text-center">${material.buy_price ?? '-'}</td>
                     <td class="px-3 py-3 text-center">
                         <div class="flex justify-center gap-5 text-[12px] font-semibold text-gray-700">
                             <button class="flex flex-col items-center gap-1 hover:text-blue-600 transition"

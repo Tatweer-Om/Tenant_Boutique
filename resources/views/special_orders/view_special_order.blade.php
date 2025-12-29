@@ -266,22 +266,33 @@
                   x-text="remainingAmount().toFixed(3) + ' ر.ع'"></span>
           </div>
 
-          <div class="mt-4">
-            <label class="block text-sm mb-1">{{ trans('messages.current_payment_amount', [], session('locale')) }}</label>
-            <input type="number" step="0.001" min="0"
-                   x-model="paymentAmount"
-                   class="form-input w-full rounded-xl border-gray-300" />
-          </div>
+          <template x-if="remainingAmount() > 0.001">
+            <div>
+              <div class="mt-4">
+                <label class="block text-sm mb-1">{{ trans('messages.current_payment_amount', [], session('locale')) }}</label>
+                <input type="number" step="0.001" min="0" :max="remainingAmount()"
+                       x-model="paymentAmount"
+                       class="form-input w-full rounded-xl border-gray-300" />
+              </div>
 
-          <div class="mt-3">
-            <label class="block text-sm mb-1">{{ trans('messages.payment_method', [], session('locale')) }}</label>
-            <select x-model="paymentMethod"
-                    class="form-select w-full rounded-xl border-gray-300">
-              <option value="cash">{{ trans('messages.cash', [], session('locale')) }}</option>
-              <option value="transfer">{{ trans('messages.bank_transfer', [], session('locale')) }}</option>
-              <option value="card">{{ trans('messages.card', [], session('locale')) }}</option>
-            </select>
-          </div>
+              <div class="mt-3">
+                <label class="block text-sm mb-1">{{ trans('messages.payment_method', [], session('locale')) }}</label>
+                <select x-model="selectedAccountId"
+                        class="form-select w-full rounded-xl border-gray-300">
+                  <option value="">{{ trans('messages.select_account', [], session('locale')) ?: 'Select Account' }}</option>
+                  <template x-for="account in accounts" :key="account.id">
+                    <option :value="account.id" x-text="account.account_name + (account.account_no ? ' (' + account.account_no + ')' : '')"></option>
+                  </template>
+                </select>
+              </div>
+            </div>
+          </template>
+
+          <template x-if="remainingAmount() <= 0.001">
+            <div class="mt-4 p-4 bg-green-50 border border-green-200 rounded-xl text-center">
+              <span class="text-green-700 font-semibold">{{ trans('messages.fully_paid', [], session('locale')) }}</span>
+            </div>
+          </template>
 
         </div>
       </template>
@@ -289,10 +300,13 @@
       <div class="flex justify-end gap-3 mt-6">
         <button @click="showPaymentModal=false"
                 class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-xl">
-          {{ trans('messages.cancel', [], session('locale')) }}
+          {{ trans('messages.close', [], session('locale')) }}
         </button>
         <button @click="confirmPayment()"
-                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl">
+                :disabled="remainingAmount() <= 0.001"
+                :class="remainingAmount() <= 0.001 
+                  ? 'px-4 py-2 bg-gray-400 text-white rounded-xl cursor-not-allowed opacity-60' 
+                  : 'px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl'">
           {{ trans('messages.confirm_payment', [], session('locale')) }}
         </button>
       </div>
