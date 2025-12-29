@@ -1,17 +1,26 @@
 <script>
-     $(document).ready(function() {
-
-
-   $('#update_material').on('submit', function(e) {
-        e.preventDefault();
-
-        let $form = $(this);
-        let $submitBtn = $form.find('button[type="submit"]');
-        
-        // Check if already submitting
-        if ($submitBtn.prop('disabled')) {
-            return false;
+$(document).ready(function() {
+    // Image preview functionality
+    $('#material_image').on('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                $('#imagePreview').attr('src', e.target.result).show();
+                $('#uploadIcon').hide();
+                $('#uploadText').hide();
+            };
+            reader.readAsDataURL(file);
         }
+    });
+
+    // Click on label to trigger file input
+    $('#imageBoxLabel').on('click', function() {
+        $('#material_image').click();
+    });
+
+    $('#add_material').on('submit', function(e) {
+        e.preventDefault();
 
         // --- Manual validations ---
         let material_name     = $('#material_name').val().trim();
@@ -35,13 +44,14 @@
 
         // --- FormData (includes file) ---
         let formData = new FormData(this); // make sure <form> has enctype="multipart/form-data"
+        let $submitBtn = $(this).find('button[type="submit"]');
         let originalBtnText = $submitBtn.html();
 
         // Disable button
         $submitBtn.prop('disabled', true).css('opacity', '0.6').html('<?= trans("messages.processing", [], session("locale")) ?>...');
 
         $.ajax({
-            url: "{{ route('update_material') }}",
+            url: "{{ route('add_material') }}",
             type: "POST",
             data: formData,
             contentType: false,
@@ -53,10 +63,16 @@
             success: function(response) {
                 if(response.status === 'success') {
                     show_notification('success', response.message);
-                    // Redirect to view_material after a short delay
-                    setTimeout(function() {
-                        window.location.href = '{{ url("view_material") }}';
-                    }, 1000);
+                    $('#add_material')[0].reset();
+                    $('#imagePreview').attr('src','').hide();
+                    $('#uploadIcon').show();
+                    $('#uploadText').show();
+                    // Redirect to material list
+                    if (response.redirect_url) {
+                        setTimeout(function() {
+                            window.location.href = response.redirect_url;
+                        }, 1000);
+                    }
                 } else {
                     // Re-enable button on unexpected response
                     $submitBtn.prop('disabled', false).css('opacity', '1').html(originalBtnText);
@@ -77,29 +93,6 @@
             }
         });
     });
-
 });
-
-
- const fileInput = document.getElementById('material_image');
-    const imagePreview = document.getElementById('imagePreview');
-    const uploadIcon = document.getElementById('uploadIcon');
-
-    fileInput.addEventListener('change', function(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            imagePreview.src = e.target.result; // Set new image
-            imagePreview.classList.remove('hidden'); // Show image
-            uploadIcon.style.display = 'none'; // Hide upload icon
-        }
-        reader.readAsDataURL(file);
-    });
-
-    // Optional: clicking the label opens file dialog
-    document.getElementById('imageBoxLabel').addEventListener('click', () => {
-        fileInput.click();
-    });
 </script>
+

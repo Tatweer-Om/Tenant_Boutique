@@ -12,8 +12,10 @@ use Illuminate\Support\Facades\File;
 
 class MaterialController extends Controller
 {
-     
-
+     public function add_material_view()
+     {
+         return view('stock.add_material');
+     }
 
    public function edit_material($id) {
     $material = Material::where('id', $id)->first();
@@ -53,7 +55,7 @@ public function getmaterial()
     $material->unit            = $request->material_unit;
     $material->category        = $request->material_category;
     $material->buy_price       = $request->purchase_price;
-    $material->sell_price      = $request->sale_price;
+    $material->sell_price      = $request->sale_price ?? '1';
     $material->rolls_count     = $request->roll_count;
     $material->meters_per_roll = $request->meter_per_roll;
     $material->material_image  = $material_image;
@@ -98,7 +100,7 @@ public function getmaterial()
     $material->unit            = $request->material_unit;
     $material->category        = $request->material_category;
     $material->buy_price       = $request->purchase_price;
-    $material->sell_price      = $request->sale_price;
+    $material->sell_price      = $request->sale_price ?? '1';
     $material->rolls_count     = $request->roll_count;
     $material->meters_per_roll = $request->meter_per_roll;
 

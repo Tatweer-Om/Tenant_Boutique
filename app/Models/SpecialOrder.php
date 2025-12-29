@@ -18,6 +18,7 @@ class SpecialOrder extends Model
         'status',
         'total_amount',
         'paid_amount',
+        'account_id',
         'user_id',
         'added_by',
         'updated_by',

@@ -12,9 +12,9 @@
         <!-- Page title and add button -->
         <div class="flex flex-col sm:flex-row flex-wrap justify-between items-start sm:items-center gap-4 mb-6">
             <h2 class="text-gray-900 text-2xl sm:text-3xl font-bold">
-                {{ trans('messages.manage_abayas', [], session('locale')) }}
+                {{ trans('messages.manage_material', [], session('locale')) }}
             </h2>
-            <a href="{{url('stock')}}"
+            <a href="{{url('add_material')}}"
                 class="inline-flex items-center justify-center h-11 px-5 rounded-lg bg-[var(--primary-color)] text-white text-sm sm:text-base font-bold shadow hover:shadow-lg hover:scale-[1.02] transition-all duration-200">
                 <span class="material-symbols-outlined me-1">add</span>
                 {{ trans('messages.add_material', [], session('locale')) }}
@@ -44,13 +44,11 @@
             <table class="w-full text-sm min-w-[1400px] mx-auto">
                 <thead class="bg-gradient-to-l from-pink-50 to-pink-100 text-gray-800">
                     <tr>
-                        <th class="text-right px-3 py-3 font-bold">{{ trans('messages.image', [], session('locale')) }}</th>
-                        <th class="text-right px-3 py-3 font-bold">{{ trans('messages.material_name', [], session('locale')) }}</th>
-                        <th class="text-right px-3 py-3 font-bold">{{ trans('messages.unit', [], session('locale')) }}</th>
-                        <th class="text-right px-3 py-3 font-bold">{{ trans('messages.category', [], session('locale')) }}</th>
-                        <th class="text-right px-3 py-3 font-bold">{{ trans('messages.rolls_count', [], session('locale')) }}</th>
-                        <th class="text-right px-3 py-3 font-bold">{{ trans('messages.meters_per_roll', [], session('locale')) }}</th>
-                        <th class="text-right px-3 py-3 font-bold">{{ trans('messages.sale_price', [], session('locale')) }}</th>
+                        <th class="text-center px-3 py-3 font-bold">{{ trans('messages.image', [], session('locale')) }} / {{ trans('messages.material_name', [], session('locale')) }}</th>
+                        <th class="text-center px-3 py-3 font-bold">{{ trans('messages.unit', [], session('locale')) }} / {{ trans('messages.material_category', [], session('locale')) }}</th>
+                        <th class="text-center px-3 py-3 font-bold">{{ trans('messages.rolls_count', [], session('locale')) }}</th>
+                        <th class="text-center px-3 py-3 font-bold">{{ trans('messages.meters_per_roll', [], session('locale')) }}</th>
+                        <th class="text-center px-3 py-3 font-bold">{{ trans('messages.sale_price', [], session('locale')) }}</th>
                         <th class="text-center px-3 py-3 font-bold">{{ trans('messages.buy_price', [], session('locale')) }}</th>
                         <th class="text-center px-3 py-3 font-bold">{{ trans('messages.action', [], session('locale')) }}</th>
 

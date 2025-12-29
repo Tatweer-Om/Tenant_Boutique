@@ -2,6 +2,7 @@
 document.addEventListener('alpine:init', () => {
   Alpine.data('tailorApp', () => ({
     showModal: false,
+    showPaymentModal: false,
     shipping_fee: 0,
     governorates: [],
     availableCities: [],
@@ -12,6 +13,11 @@ document.addEventListener('alpine:init', () => {
       'الشرقية': ['إبراء', 'صور', 'بدية'],
     },
     loading: false,
+    savedOrderId: null,
+    paymentAmount: '',
+    selectedAccountId: '',
+    accounts: [],
+    paymentProcessing: false,
     customer: { 
       source: '', 
       name: '', 
@@ -42,6 +48,19 @@ document.addEventListener('alpine:init', () => {
       // Fallback to static map keys if API returns empty
       if (this.governorates.length === 0) {
         this.governorates = Object.keys(this.areaCityMap).map(name => ({id: name, name}));
+      }
+      await this.loadAccounts();
+    },
+
+    async loadAccounts() {
+      try {
+        const response = await fetch('{{ url('accounts/all') }}');
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          this.accounts = data;
+        }
+      } catch (error) {
+        console.error('Error loading accounts:', error);
       }
     },
 
@@ -117,7 +136,8 @@ document.addEventListener('alpine:init', () => {
     },
     
     selectCity(cityId) {
-      const city = this.availableCities.find(c => c.id == cityId);
+      // Compare as strings to handle type mismatches
+      const city = this.availableCities.find(c => String(c.id) === String(cityId));
       this.customer.city_id = cityId || '';
       this.customer.city = city ? city.name : '';
       this.shipping_fee = city ? city.charge : 0;
@@ -141,7 +161,7 @@ document.addEventListener('alpine:init', () => {
       }
     },
     
-    selectCustomer(customerItem) {
+    async selectCustomer(customerItem) {
       // Fill customer data from selected customer
       this.customer.name = customerItem.name || '';
       this.customer.phone = customerItem.phone || '';
@@ -149,38 +169,70 @@ document.addEventListener('alpine:init', () => {
       
       // Fill area/governorate if available (area_id in customer = governorate_id in form)
       if (customerItem.area_id) {
-        // Try to find matching area in governorates list
-        const matchingArea = this.areasMap.find(a => a.id == customerItem.area_id);
+        // Try to find matching area in governorates list (compare as strings to handle type mismatches)
+        const matchingArea = this.areasMap.find(a => String(a.id) === String(customerItem.area_id));
         if (matchingArea) {
           this.customer.governorate_id = customerItem.area_id;
           this.customer.governorate_name = matchingArea.name;
-          // Update cities for this area
-          this.updateCities(customerItem.area_id);
+          
+          // Update cities for this area (this will fetch cities asynchronously)
+          await this.updateCitiesAsync(customerItem.area_id);
           
           // After cities are loaded, select the city if available
           if (customerItem.city_id) {
-            // Use a small delay to ensure cities are loaded
-            setTimeout(() => {
-              const matchingCity = this.availableCities.find(c => c.id == customerItem.city_id);
+            // Wait for Alpine to update the DOM with new cities
+            await this.$nextTick();
+            
+            // Try to find the city (compare as strings and also try as numbers)
+            let matchingCity = this.availableCities.find(c => String(c.id) === String(customerItem.city_id));
+            if (!matchingCity) {
+              // Try comparing as numbers
+              matchingCity = this.availableCities.find(c => Number(c.id) === Number(customerItem.city_id));
+            }
+            
               if (matchingCity) {
-                this.selectCity(customerItem.city_id);
-              }
-            }, 300);
+              // Set city_id directly (ensure it's the same type as the option value)
+              this.customer.city_id = matchingCity.id;
+              // Call selectCity to update shipping fee
+              this.selectCity(matchingCity.id);
+            } else {
+              // If not found immediately, wait a bit more and try again
+              setTimeout(async () => {
+                await this.$nextTick();
+                let cityMatch = this.availableCities.find(c => String(c.id) === String(customerItem.city_id));
+                if (!cityMatch) {
+                  cityMatch = this.availableCities.find(c => Number(c.id) === Number(customerItem.city_id));
+                }
+                if (cityMatch) {
+                  this.customer.city_id = cityMatch.id;
+                  this.selectCity(cityMatch.id);
+                } else {
+                  console.warn('City not found:', customerItem.city_id, 'Available cities:', this.availableCities.map(c => ({id: c.id, name: c.name})));
+                }
+              }, 500);
+            }
           }
         }
-      } else if (customerItem.city_id) {
-        // If no area_id but city_id exists, try to find city and set its area
-        // This is a fallback - ideally area_id should be set
-        setTimeout(() => {
-          const matchingCity = this.availableCities.find(c => c.id == customerItem.city_id);
-          if (matchingCity) {
-            this.selectCity(customerItem.city_id);
-          }
-        }, 300);
       }
       
       // Clear suggestions
       this.customerSuggestions = [];
+    },
+
+    async updateCitiesAsync(areaId) {
+      this.availableCities = [];
+      this.customer.city = '';
+      this.customer.city_id = '';
+      this.customer.governorate_name = this.areasMap.find(a => a.id == areaId || String(a.id) === String(areaId))?.name || '';
+      this.customer.governorate_id = areaId || '';
+
+      if (areaId) {
+        await this.fetchCities(areaId);
+      } else {
+        // fallback to static map if no area id match
+        this.availableCities = (this.areaCityMap[this.customer.governorate_name] || []).map(n => ({id: n, name: n, charge: 0}));
+        this.updateShipping();
+      }
     },
     
     addOrder() {
@@ -213,14 +265,118 @@ document.addEventListener('alpine:init', () => {
     },
     
     openPaymentModal() {
-      // Validate before opening modal
-      if (!this.customer.name || !this.customer.source) {
-        alert('{{ trans('messages.customer_name', [], session('locale')) }} و {{ trans('messages.order_source', [], session('locale')) }} مطلوبان');
+      // Validate all required fields before opening modal
+      
+      // Validate customer name
+      if (!this.customer.name || this.customer.name.trim() === '') {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'error',
+            title: '{{ trans('messages.error', [], session('locale')) }}',
+            text: '{{ trans('messages.customer_name', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}'
+          });
+        } else {
+          alert('{{ trans('messages.customer_name', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}');
+        }
         return;
       }
       
-      if (this.orders.length === 0 || !this.orders.some(o => o.price > 0)) {
+      // Validate order source
+      if (!this.customer.source || this.customer.source.trim() === '') {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'error',
+            title: '{{ trans('messages.error', [], session('locale')) }}',
+            text: '{{ trans('messages.order_source', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}'
+          });
+        } else {
+          alert('{{ trans('messages.order_source', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}');
+        }
+        return;
+      }
+      
+      // Validate phone number
+      if (!this.customer.phone || this.customer.phone.trim() === '') {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'error',
+            title: '{{ trans('messages.error', [], session('locale')) }}',
+            text: '{{ trans('messages.phone_number', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}'
+          });
+        } else {
+          alert('{{ trans('messages.phone_number', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}');
+        }
+        return;
+      }
+      
+      // Validate governorate
+      if (!this.customer.governorate_id || this.customer.governorate_id === '') {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'error',
+            title: '{{ trans('messages.error', [], session('locale')) }}',
+            text: '{{ trans('messages.governorate', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}'
+          });
+        } else {
+          alert('{{ trans('messages.governorate', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}');
+        }
+        return;
+      }
+      
+      // Validate city/state area
+      if (!this.customer.city_id || this.customer.city_id === '') {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'error',
+            title: '{{ trans('messages.error', [], session('locale')) }}',
+            text: '{{ trans('messages.state_area', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}'
+          });
+        } else {
+          alert('{{ trans('messages.state_area', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}');
+        }
+        return;
+      }
+      
+      // Validate address
+      if (!this.customer.address || this.customer.address.trim() === '') {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'error',
+            title: '{{ trans('messages.error', [], session('locale')) }}',
+            text: '{{ trans('messages.address', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}'
+          });
+        } else {
+          alert('{{ trans('messages.address', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}');
+        }
+        return;
+      }
+      
+      // Validate orders
+      if (this.orders.length === 0) {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'error',
+            title: '{{ trans('messages.error', [], session('locale')) }}',
+            text: '{{ trans('messages.add_new_abaya', [], session('locale')) }}'
+          });
+        } else {
         alert('{{ trans('messages.add_new_abaya', [], session('locale')) }}');
+        }
+        return;
+      }
+      
+      // Validate each order has price > 0
+      const invalidOrders = this.orders.filter(o => !o.price || parseFloat(o.price) <= 0);
+      if (invalidOrders.length > 0) {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'error',
+            title: '{{ trans('messages.error', [], session('locale')) }}',
+            text: '{{ trans('messages.price_is_required_for_all_items', [], session('locale')) ?: 'Price is required for all items' }}'
+          });
+        } else {
+          alert('{{ trans('messages.price_is_required_for_all_items', [], session('locale')) ?: 'Price is required for all items' }}');
+        }
         return;
       }
       
@@ -280,54 +436,16 @@ document.addEventListener('alpine:init', () => {
         if (data.success) {
           // Keep loading true until form is reset (prevents multiple submissions)
           this.showModal = false;
+          this.loading = false;
           
-          // Open bill in new window
+          // Store order ID for payment
           if (data.special_order_id) {
-            const billUrl = '{{ url("special-order-bill") }}/' + data.special_order_id;
-            window.open(billUrl, '_blank');
-          }
-          
-          // Show success message
-          if (typeof Swal !== 'undefined') {
-            Swal.fire({
-              icon: 'success',
-              title: '{{ trans('messages.order_saved_successfully', [], session('locale')) }}',
-              timer: 2000,
-              showConfirmButton: false
-            }).then(() => {
-              // Reset form and re-enable button
-              this.loading = false;
-              this.customer = { 
-                source: '', 
-                name: '', 
-                phone: '', 
-                governorate_id: '',
-                city_id: '',
-                address: '',
-                is_gift: 'no', 
-                gift_message: '' 
-              };
-              this.orders = [{ 
-                id: 1, 
-                stock_id: null,
-                abaya_code: '',
-                design_name: '',
-                quantity: 1, 
-                price: 0, 
-                length: '', 
-                bust: '', 
-                sleeves: '', 
-                buttons: 'yes', 
-                notes: '' 
-              }];
-              this.shipping_fee = 0;
-              this.availableCities = [];
-            });
-          } else {
-            alert('{{ trans('messages.order_saved_successfully', [], session('locale')) }}');
-            // Reset form and re-enable button
-            this.loading = false;
-            location.reload();
+            this.savedOrderId = data.special_order_id;
+            // Set payment amount to total (remaining amount for new order)
+            this.paymentAmount = this.calculateTotal().toFixed(3);
+            this.selectedAccountId = '';
+            // Show payment modal
+            this.showPaymentModal = true;
           }
         } else {
           // Re-enable button on error
@@ -348,6 +466,154 @@ document.addEventListener('alpine:init', () => {
           alert('حدث خطأ أثناء حفظ الطلب: ' + error.message);
         }
       }
+    },
+
+    async confirmPayment() {
+      if (!this.savedOrderId) return;
+
+      const amount = parseFloat(this.paymentAmount);
+      if (isNaN(amount) || amount <= 0) {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'warning',
+            title: '{{ trans('messages.error', [], session('locale')) }}',
+            text: '{{ trans('messages.please_enter_valid_amount', [], session('locale')) }}'
+          });
+        } else {
+          alert('{{ trans('messages.please_enter_valid_amount', [], session('locale')) }}');
+        }
+        return;
+      }
+
+      // Validate account selection
+      if (!this.selectedAccountId) {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'warning',
+            title: '{{ trans('messages.error', [], session('locale')) }}',
+            text: '{{ trans('messages.please_select_account', [], session('locale')) ?: 'Please select an account' }}'
+          });
+        } else {
+          alert('{{ trans('messages.please_select_account', [], session('locale')) ?: 'Please select an account' }}');
+        }
+        return;
+      }
+
+      this.paymentProcessing = true;
+
+      try {
+        const response = await fetch('{{ url('record_payment') }}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({
+            order_id: this.savedOrderId,
+            amount: amount,
+            account_id: this.selectedAccountId
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          this.showPaymentModal = false;
+          
+          // Open bill in new window
+          const billUrl = '{{ url("special-order-bill") }}/' + this.savedOrderId;
+          window.open(billUrl, '_blank');
+          
+          // Show success message
+          if (typeof Swal !== 'undefined') {
+            Swal.fire({
+              icon: 'success',
+              title: '{{ trans('messages.order_saved_successfully', [], session('locale')) }}',
+              text: data.message || '{{ trans('messages.confirm_payment', [], session('locale')) }}',
+              timer: 2000,
+              showConfirmButton: false
+            }).then(() => {
+              this.resetForm();
+            });
+          } else {
+            alert('{{ trans('messages.order_saved_successfully', [], session('locale')) }}');
+            this.resetForm();
+          }
+        } else {
+          throw new Error(data.message || 'Failed to record payment');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'error',
+            title: '{{ trans('messages.error', [], session('locale')) }}',
+            text: error.message || '{{ trans('messages.error_recording_payment', [], session('locale')) ?: 'Error recording payment' }}'
+          });
+        } else {
+          alert('{{ trans('messages.error_recording_payment', [], session('locale')) ?: 'Error recording payment' }}');
+        }
+      } finally {
+        this.paymentProcessing = false;
+      }
+    },
+
+    skipPayment() {
+      this.showPaymentModal = false;
+      
+      // Open bill in new window
+      if (this.savedOrderId) {
+        const billUrl = '{{ url("special-order-bill") }}/' + this.savedOrderId;
+        window.open(billUrl, '_blank');
+      }
+      
+      // Show success message
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          icon: 'success',
+          title: '{{ trans('messages.order_saved_successfully', [], session('locale')) }}',
+          timer: 2000,
+          showConfirmButton: false
+        }).then(() => {
+          this.resetForm();
+        });
+      } else {
+        alert('{{ trans('messages.order_saved_successfully', [], session('locale')) }}');
+        this.resetForm();
+      }
+    },
+
+    resetForm() {
+      this.loading = false;
+      this.savedOrderId = null;
+      this.paymentAmount = '';
+      this.selectedAccountId = '';
+              this.customer = { 
+                source: '', 
+                name: '', 
+                phone: '', 
+              governorate_id: '',
+              city_id: '',
+        address: '',
+                is_gift: 'no', 
+                gift_message: '' 
+              };
+              this.orders = [{ 
+                id: 1, 
+                stock_id: null,
+                abaya_code: '',
+                design_name: '',
+                quantity: 1, 
+                price: 0, 
+                length: '', 
+                bust: '', 
+                sleeves: '', 
+                buttons: 'yes', 
+                notes: '' 
+              }];
+              this.shipping_fee = 0;
+            this.availableCities = [];
     }
   }));
 

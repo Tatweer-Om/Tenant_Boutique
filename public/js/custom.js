@@ -99,7 +99,11 @@
       if (code === "en") {
         htmlEl.setAttribute("lang", "en");
         htmlEl.setAttribute("dir", "ltr");
-        if (langFlag) langFlag.textContent = "🇬🇧";
+        // Update flag only when user actually changes language
+        if (langFlag) {
+          langFlag.textContent = "🇬🇧";
+          langFlag.setAttribute("data-locale", "en");
+        }
         localStorage.setItem("ui:lang", "en");
         
         // Update Laravel session via AJAX
@@ -109,7 +113,11 @@
       } else {
         htmlEl.setAttribute("lang", "ar");
         htmlEl.setAttribute("dir", "rtl");
-        if (langFlag) langFlag.textContent = "🇴🇲";
+        // Update flag only when user actually changes language
+        if (langFlag) {
+          langFlag.textContent = "🇴🇲";
+          langFlag.setAttribute("data-locale", "ar");
+        }
         localStorage.setItem("ui:lang", "ar");
         
         // Update Laravel session via AJAX
@@ -123,6 +131,22 @@
     const sessionLocale = htmlEl.getAttribute("lang") || "ar";
     const initialDir = htmlEl.getAttribute("dir") || "rtl";
     
+    // Ensure HTML dir attribute matches session locale (fix RTL issue after login)
+    if (sessionLocale === "en") {
+      htmlEl.setAttribute("dir", "ltr");
+    } else {
+      htmlEl.setAttribute("dir", "rtl");
+    }
+    
+    // Ensure flag matches session locale (prevent duplication)
+    if (langFlag) {
+      const flagLocale = langFlag.getAttribute("data-locale");
+      if (flagLocale !== sessionLocale) {
+        langFlag.textContent = sessionLocale === "en" ? "🇬🇧" : "🇴🇲";
+        langFlag.setAttribute("data-locale", sessionLocale);
+      }
+    }
+    
     // Check localStorage for saved preference
     const savedLocale = localStorage.getItem("ui:lang") || sessionLocale;
 
@@ -130,13 +154,6 @@
     if (savedLocale !== sessionLocale) {
       // Update session to match localStorage preference
       updateLocale(savedLocale);
-    } else {
-      // If they match, just apply the language without reloading
-      if (sessionLocale === "en") {
-        setLang("en", false); // false = don't reload page on initial load
-      } else {
-        setLang("ar", false);
-      }
     }
 
     // Handle menu clicks

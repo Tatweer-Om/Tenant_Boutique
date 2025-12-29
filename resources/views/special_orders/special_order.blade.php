@@ -385,6 +385,76 @@
       </div>
     </div>
   </div>
+
+  <!-- Payment Modal -->
+  <div x-show="showPaymentModal" x-transition.opacity
+       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div @click.away="showPaymentModal=false"
+         x-transition.scale
+         class="bg-white w-full max-w-md mx-4 rounded-2xl shadow-2xl p-6">
+
+      <h2 class="text-xl font-bold mb-4">{{ trans('messages.record_payment', [], session('locale')) }}</h2>
+
+      <template x-if="savedOrderId">
+        <div class="space-y-3 text-sm">
+          <div class="flex justify-between">
+            <span class="text-gray-600">{{ trans('messages.order_number', [], session('locale')) }}:</span>
+            <span class="font-semibold" x-text="savedOrderId"></span>
+          </div>
+
+          <div class="flex justify-between">
+            <span class="text-gray-600">{{ trans('messages.total_amount', [], session('locale')) }}:</span>
+            <span class="font-semibold text-blue-700"
+                  x-text="calculateTotal().toFixed(3) + ' ر.ع'"></span>
+          </div>
+
+          <div class="flex justify-between">
+            <span class="text-gray-600">{{ trans('messages.previously_paid', [], session('locale')) }}:</span>
+            <span class="font-semibold text-emerald-700">0.000 ر.ع</span>
+          </div>
+
+          <div class="flex justify-between">
+            <span class="text-gray-600">{{ trans('messages.remaining', [], session('locale')) }}:</span>
+            <span class="font-semibold text-red-600"
+                  x-text="calculateTotal().toFixed(3) + ' ر.ع'"></span>
+          </div>
+
+          <div class="mt-4">
+            <label class="block text-sm mb-1">{{ trans('messages.current_payment_amount', [], session('locale')) }}</label>
+            <input type="number" step="0.001" min="0" :max="calculateTotal()"
+                   x-model="paymentAmount"
+                   class="form-input w-full rounded-xl border-gray-300" />
+          </div>
+
+          <div class="mt-3">
+            <label class="block text-sm mb-1">{{ trans('messages.payment_method', [], session('locale')) }}</label>
+            <select x-model="selectedAccountId"
+                    class="form-select w-full rounded-xl border-gray-300">
+              <option value="">{{ trans('messages.select_account', [], session('locale')) ?: 'Select Account' }}</option>
+              <template x-for="account in accounts" :key="account.id">
+                <option :value="account.id" x-text="account.account_name + (account.account_no ? ' (' + account.account_no + ')' : '')"></option>
+              </template>
+            </select>
+          </div>
+
+        </div>
+      </template>
+
+      <div class="flex justify-end gap-3 mt-6">
+        <button @click="skipPayment()"
+                class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-xl">
+          {{ trans('messages.skip', [], session('locale')) ?: 'Skip' }}
+        </button>
+        <button @click="confirmPayment()"
+                :disabled="paymentProcessing"
+                :class="paymentProcessing ? 'px-4 py-2 bg-indigo-400 text-white rounded-xl cursor-not-allowed' : 'px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl'">
+          {{ trans('messages.confirm_payment', [], session('locale')) }}
+        </button>
+      </div>
+    </div>
+  </div>
+    </div>
+  </div>
 </main>
 
 

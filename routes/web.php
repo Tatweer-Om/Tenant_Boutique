@@ -49,6 +49,7 @@ Route::get('dashboard/abayas-under-tailoring', [HomeController::class, 'getAbaya
 Route::get('dashboard/low-stock-items', [HomeController::class, 'getLowStockItems'])->name('dashboard.low_stock_items');
 Route::get('dashboard/boutique-rent-reminders', [HomeController::class, 'getBoutiqueRentReminders'])->name('dashboard.boutique_rent_reminders');
 Route::get('dashboard/recent-special-orders', [HomeController::class, 'getRecentSpecialOrders'])->name('dashboard.recent_special_orders');
+Route::get('dashboard/notifications', [HomeController::class, 'getNotifications'])->name('dashboard.notifications');
 
 // Settings Routes
 Route::get('settings', [SettingsController::class, 'index'])->name('settings');
@@ -121,6 +122,10 @@ Route::put('channels/{channel}', [ChannelController::class, 'update']);
 Route::delete('channels/{channel}', [ChannelController::class, 'destroy']);
 Route::get('channels/list', [ChannelController::class, 'getchannels']);
 Route::get('channels/{channel}', [ChannelController::class, 'show']);
+Route::post('channels/{channel}/update-status', [ChannelController::class, 'updateStatus']);
+Route::get('channel_profile/{id}', [ChannelController::class, 'profile'])->name('channel_profile');
+Route::get('channel_profile/{id}/transfers', [ChannelController::class, 'getTransfers'])->name('channel_profile.transfers');
+Route::get('channel_profile/{id}/transfer-items', [ChannelController::class, 'getTransferItems'])->name('channel_profile.transfer_items');
 
 Route::get('categories', [CategoryController::class, 'index'])->name('category');
 Route::post('categories', [CategoryController::class, 'store']);
@@ -207,6 +212,7 @@ Route::delete('delete_image', [ResaleController::class, 'delete_image'])->name('
 Route::delete('del_img', [ResaleController::class, 'del_img'])->name('del_img');
 
 Route::get('material', [MaterialController::class, 'index'])->name('material');
+Route::get('add_material', [MaterialController::class, 'add_material_view'])->name('add_material.view');
 Route::post('add_material', [MaterialController::class, 'add_material'])->name('add_material');
 Route::get('material/list', [MaterialController::class, 'getmaterial']);
 Route::get('materials/all', [MaterialController::class, 'getAllMaterials'])->name('materials.all');
@@ -257,7 +263,6 @@ Route::get('tailor-orders-list/export-excel', [SpecialOrderController::class, 'e
 Route::get('maintenance', [SpecialOrderController::class, 'maintenance'])->name('maintenance');
 Route::get('maintenance/data', [SpecialOrderController::class, 'getMaintenanceData'])->name('maintenance.data');
 Route::get('maintenance/history', [SpecialOrderController::class, 'getRepairHistory'])->name('maintenance.history');
-Route::get('maintenance/sent-to-tailors', [SpecialOrderController::class, 'getSentToTailorsList'])->name('maintenance.sent_to_tailors');
 Route::post('maintenance/send-repair', [SpecialOrderController::class, 'sendForRepair'])->name('maintenance.send_repair');
 Route::post('maintenance/receive', [SpecialOrderController::class, 'receiveFromTailor'])->name('maintenance.receive');
 Route::post('maintenance/deliver', [SpecialOrderController::class, 'markRepairedDelivered'])->name('maintenance.deliver');
@@ -306,4 +311,6 @@ Route::get('pos/cities', [PosController::class, 'citiesByArea'])->name('pos.citi
 Route::get('pos/orders/list', [PosController::class, 'ordersList'])->name('pos.orders.list');
 Route::get('pos/orders/list/data', [PosController::class, 'getOrdersList'])->name('pos.orders.list.data');
 Route::post('pos/orders/update-delivery-status', [PosController::class, 'updateDeliveryStatus'])->name('pos.orders.update_delivery_status');
+Route::get('pos/active-channels', [PosController::class, 'getActiveChannels'])->name('pos.active_channels');
+Route::post('pos/select-channel', [PosController::class, 'selectChannel'])->name('pos.select_channel');
 Route::get('pos_bill', [PosController::class, 'pos_bill'])->name('pos_bill');

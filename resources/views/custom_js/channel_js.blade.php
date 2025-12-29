@@ -7,16 +7,31 @@
         // ---- Table Rows ----
         let rows = '';
         $.each(res.data, function(i, channel) {
+            const statusForPos = channel.status_for_pos || 1; // Default to 1 if null/undefined
+            const isActive = statusForPos == 1;
+            const statusText = isActive ? '<?= trans("messages.active_for_pos", [], session("locale")) ?>' : '<?= trans("messages.inactive_for_pos", [], session("locale")) ?>';
+            const statusClass = isActive ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400 hover:bg-gray-500';
+            const statusIcon = isActive ? 'check_circle' : 'cancel';
+            
             rows += `
             <tr class="hover:bg-pink-50/50 transition-colors" data-id="${channel.id}">
                 <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${channel.channel_name_ar}</td>
                 <td class="px-4 sm:px-6 py-5 text-center">
                     <div class="flex items-center justify-center gap-4 sm:gap-6">
+                        <a href="{{ url('channel_profile') }}/${channel.id}" 
+                           class="icon-btn" 
+                           title="<?= trans('messages.view_profile', [], session('locale')) ?? 'View Profile' ?>">
+                            <span class="material-symbols-outlined">person</span>
+                        </a>
                         <button class="edit-btn icon-btn">
                             <span class="material-symbols-outlined">edit</span>
                         </button>
-                        <button class="delete-btn icon-btn hover:text-red-500">
-                            <span class="material-symbols-outlined">delete</span>
+                        <button class="status-toggle-btn px-4 py-2 rounded-full text-white text-sm font-medium transition-colors ${statusClass}" 
+                                data-status="${statusForPos}" 
+                                data-id="${channel.id}"
+                                title="${statusText}">
+                            <span class="material-symbols-outlined text-base align-middle mr-1">${statusIcon}</span>
+                            ${statusText}
                         </button>
                     </div>
                 </td>
@@ -161,39 +176,46 @@ $(document).on('click', '#pagination a', function(e) {
             });
         });
 
-        // Delete channel
-        $(document).on('click', '.delete-btn', function() {
-            let id = $(this).closest('tr').data('id');
+        // Toggle channel status for POS
+        $(document).on('click', '.status-toggle-btn', function() {
+            let id = $(this).data('id');
+            let currentStatus = $(this).data('status');
+            let newStatus = currentStatus == 1 ? 2 : 1;
+            let statusText = newStatus == 1 ? '<?= trans("messages.active_for_pos", [], session("locale")) ?>' : '<?= trans("messages.inactive_for_pos", [], session("locale")) ?>';
+            let currentStatusText = currentStatus == 1 ? '<?= trans("messages.active_for_pos", [], session("locale")) ?>' : '<?= trans("messages.inactive_for_pos", [], session("locale")) ?>';
+            let confirmTitle = newStatus == 1 ? '<?= trans("messages.confirm_activate_title", [], session("locale")) ?>' : '<?= trans("messages.confirm_deactivate_title", [], session("locale")) ?>';
+            let confirmText = newStatus == 1 ? '<?= trans("messages.confirm_activate_text", [], session("locale")) ?>' : '<?= trans("messages.confirm_deactivate_text", [], session("locale")) ?>';
 
             Swal.fire({
-                title: '<?= trans("messages.confirm_delete_title", [], session("locale")) ?>',
-                text: '<?= trans("messages.confirm_delete_text", [], session("locale")) ?>',
-                icon: 'warning',
+                title: confirmTitle,
+                text: confirmText,
+                icon: 'question',
                 showCancelButton: true,
-                confirmButtonColor: '#3085d6',
+                confirmButtonColor: newStatus == 1 ? '#10b981' : '#6b7280',
                 cancelButtonColor: '#d33',
-                confirmButtonText: '<?= trans("messages.yes_delete", [], session("locale")) ?>',
+                confirmButtonText: '<?= trans("messages.yes_confirm", [], session("locale")) ?>',
                 cancelButtonText: '<?= trans("messages.cancel", [], session("locale")) ?>'
             }).then((result) => {
                 if (result.isConfirmed) {
                     $.ajax({
-                        url: '<?= url("channels") ?>/' + id,
-                        method: 'DELETE',
+                        url: '<?= url("channels") ?>/' + id + '/update-status',
+                        method: 'POST',
                         data: {
-                            _token: '<?= csrf_token() ?>'
+                            _token: '<?= csrf_token() ?>',
+                            status_for_pos: newStatus
                         },
                         success: function(data) {
                             loadchannels(); // reload table
                             Swal.fire(
-                                '<?= trans("messages.deleted_success", [], session("locale")) ?>',
-                                '<?= trans("messages.deleted_success_text", [], session("locale")) ?>',
+                                '<?= trans("messages.status_updated", [], session("locale")) ?>',
+                                '<?= trans("messages.status_changed_to", [], session("locale")) ?>: ' + statusText,
                                 'success'
                             );
                         },
-                        error: function() {
+                        error: function(xhr) {
                             Swal.fire(
-                                '<?= trans("messages.delete_error", [], session("locale")) ?>',
-                                '<?= trans("messages.delete_error_text", [], session("locale")) ?>',
+                                '<?= trans("messages.status_update_error", [], session("locale")) ?>',
+                                '<?= trans("messages.status_update_error_text", [], session("locale")) ?>',
                                 'error'
                             );
                         }
