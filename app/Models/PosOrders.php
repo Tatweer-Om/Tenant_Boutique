@@ -10,6 +10,7 @@ class PosOrders extends Model
 {
     protected $fillable = [
         'customer_id',
+        'special_order_id',
         'order_type',
         'delivery_status',
         'item_count',
@@ -19,6 +20,11 @@ class PosOrders extends Model
         'total_discount',
         'delivery_charges',
         'delivery_paid',
+        'delivery_fee',
+        'delivery_city_id',
+        'delivery_area_id',
+        'delivery_address',
+        'delivery_fee_paid',
         'profit',
         'return_status',
         'restore_status',
@@ -47,5 +53,10 @@ class PosOrders extends Model
     public function channel()
     {
         return $this->belongsTo(Channel::class, 'channel_id');
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id');
     }
 }

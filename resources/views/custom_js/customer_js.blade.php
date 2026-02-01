@@ -50,20 +50,20 @@
             
             rows += `
             <tr class="hover:bg-pink-50/50 transition-colors" data-id="${customer.id}">
-              <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">
+              <td class="px-4 sm:px-6 py-2 text-[var(--text-primary)]">
                 <a href="${profileUrl}" class="text-[var(--primary-color)] hover:text-[var(--primary-darker)] hover:underline font-semibold transition">
                   ${customerName}
                 </a>
               </td>
-                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">
+                <td class="px-4 sm:px-6 py-2 text-[var(--text-primary)]">
                   <a href="${profileUrl}" class="text-[var(--primary-color)] hover:text-[var(--primary-darker)] hover:underline transition">
                     ${customerPhone}
                   </a>
                 </td>
-                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${cityDisplay}</td>
-                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${areaDisplay}</td>
+                <td class="px-4 sm:px-6 py-2 text-[var(--text-primary)]">${cityDisplay}</td>
+                <td class="px-4 sm:px-6 py-2 text-[var(--text-primary)]">${areaDisplay}</td>
 
-                <td class="px-4 sm:px-6 py-5 text-center">
+                <td class="px-4 sm:px-6 py-2 text-center">
                     <div class="flex items-center justify-center gap-4 sm:gap-6">
     <a href="{{ url('customer_profile') }}/${customer.id}" class="icon-btn text-[var(--primary-color)] hover:text-[var(--primary-darker)]" title="{{ trans('messages.view_profile', [], session('locale')) ?: 'View Profile' }}">
         <span class="material-symbols-outlined">person</span>
@@ -84,29 +84,80 @@
 
         // ---- Pagination ----
         let pagination = '';
+        const currentPage = res.current_page;
+        const lastPage = res.last_page;
+        const maxVisiblePages = 7; // Show max 7 page numbers
 
-        // Previous
+        // Previous button
+        const isRTL = '{{ session('locale', 'en') }}' === 'ar';
+        const prevIcon = isRTL ? 'chevron_right' : 'chevron_left';
+        const nextIcon = isRTL ? 'chevron_left' : 'chevron_right';
+        
         pagination += `
-        <li class="px-3 py-1 rounded-full ${!res.prev_page_url ? 'opacity-50 pointer-events-none' : 'bg-gray-200 hover:bg-gray-300'}">
-            <a href="${res.prev_page_url ? res.prev_page_url : '#'}">&laquo;</a>
+        <li class="px-3 py-2 rounded-lg transition-all ${!res.prev_page_url ? 'opacity-50 cursor-not-allowed bg-gray-100' : 'bg-white border border-gray-300 hover:bg-[var(--primary-color)] hover:text-white hover:border-[var(--primary-color)]'}">
+            <a href="${res.prev_page_url ? res.prev_page_url : '#'}" class="flex items-center gap-1 text-sm font-medium">
+                <span class="material-symbols-outlined text-base">${prevIcon}</span>
+                <span class="hidden sm:inline">{{ trans('messages.previous', [], session('locale')) ?: 'Previous' }}</span>
+            </a>
         </li>`;
 
-        // Page numbers
-        for (let i = 1; i <= res.last_page; i++) {
-            pagination += `
-            <li class="px-3 py-1 rounded-full ${res.current_page == i ? ' text-white' : 'bg-gray-200 hover:bg-gray-300'}">
-                <a href="{{ url('customers/list') }}?page=${i}">${i}</a>
-            </li>
-            `;
+        // Calculate which pages to show
+        let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+        let endPage = Math.min(lastPage, startPage + maxVisiblePages - 1);
+        
+        // Adjust start if we're near the end
+        if (endPage - startPage < maxVisiblePages - 1) {
+            startPage = Math.max(1, endPage - maxVisiblePages + 1);
         }
 
-        // Next
+        // Show first page and ellipsis if needed
+        if (startPage > 1) {
+            pagination += `
+            <li class="px-3 py-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 transition-all">
+                <a href="{{ url('customers/list') }}?page=1" class="text-sm font-medium">1</a>
+            </li>`;
+            if (startPage > 2) {
+                pagination += `<li class="px-2 py-2 text-gray-400">...</li>`;
+            }
+        }
+
+        // Page numbers
+        for (let i = startPage; i <= endPage; i++) {
+            const isActive = currentPage == i;
+            pagination += `
+            <li class="px-3 py-2 rounded-lg transition-all ${isActive 
+                ? 'bg-[var(--primary-color)] text-white shadow-md' 
+                : 'bg-white border border-gray-300 hover:bg-gray-50'}">
+                <a href="{{ url('customers/list') }}?page=${i}" class="text-sm font-medium">${i}</a>
+            </li>`;
+        }
+
+        // Show last page and ellipsis if needed
+        if (endPage < lastPage) {
+            if (endPage < lastPage - 1) {
+                pagination += `<li class="px-2 py-2 text-gray-400">...</li>`;
+            }
+            pagination += `
+            <li class="px-3 py-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 transition-all">
+                <a href="{{ url('customers/list') }}?page=${lastPage}" class="text-sm font-medium">${lastPage}</a>
+            </li>`;
+        }
+
+        // Next button
         pagination += `
-        <li class="px-3 py-1 rounded-full ${!res.next_page_url ? 'opacity-50 pointer-events-none' : 'bg-gray-200 hover:bg-gray-300'}">
-            <a href="${res.next_page_url ? res.next_page_url : '#'}">&raquo;</a>
+        <li class="px-3 py-2 rounded-lg transition-all ${!res.next_page_url ? 'opacity-50 cursor-not-allowed bg-gray-100' : 'bg-white border border-gray-300 hover:bg-[var(--primary-color)] hover:text-white hover:border-[var(--primary-color)]'}">
+            <a href="${res.next_page_url ? res.next_page_url : '#'}" class="flex items-center gap-1 text-sm font-medium">
+                <span class="hidden sm:inline">{{ trans('messages.next', [], session('locale')) ?: 'Next' }}</span>
+                <span class="material-symbols-outlined text-base">${nextIcon}</span>
+            </a>
         </li>`;
 
         $('#pagination').html(pagination);
+        
+        // Update pagination info
+        const startItem = (currentPage - 1) * res.per_page + 1;
+        const endItem = Math.min(currentPage * res.per_page, res.total);
+        $('#pagination-info').text(`{{ trans('messages.showing', [], session('locale')) ?: 'Showing' }} ${startItem} - ${endItem} {{ trans('messages.of', [], session('locale')) ?: 'of' }} ${res.total} {{ trans('messages.items', [], session('locale')) ?: 'items' }}`);
     });
 }
 

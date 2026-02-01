@@ -323,11 +323,7 @@
 
         <div id="partialPaymentBox" class="hidden space-y-3 mt-3">
           <div id="partialAccounts" class="space-y-2"></div>
-
-          <div class="flex justify-between bg-gray-50 p-3 rounded-xl">
-            <span>{{ trans('messages.remaining', [], session('locale')) }}</span>
-            <strong id="partialRemaining">0.00 {{ trans('messages.omr', [], session('locale')) }}</strong>
-          </div>
+          <p class="text-xs text-gray-600">{{ trans('messages.partial_sum_must_equal_total', [], session('locale')) ?: 'Sum of all amounts must equal the payable amount above.' }}</p>
         </div>
 
 
@@ -378,10 +374,10 @@
             <span id="deliveryPrice">0.00 {{ trans('messages.omr', [], session('locale')) }}</span>
           </div>
 
-          <label class="flex items-center gap-2">
+          <div class="flex items-center gap-2" id="deliveryPaidRow">
             <input type="checkbox" id="deliveryPaid" />
-            <span class="text-sm">{{ trans('messages.delivery_price_paid', [], session('locale')) }}</span>
-          </label>
+            <span class="text-sm cursor-pointer select-none" id="deliveryPaidLabel">{{ trans('messages.delivery_price_paid', [], session('locale')) }}</span>
+          </div>
         </div>
 
         <!-- Customer -->

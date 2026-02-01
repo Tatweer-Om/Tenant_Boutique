@@ -26,6 +26,7 @@ document.addEventListener('alpine:init', () => {
     selectedItems: [],
     receivedList: [],
     loading: false,
+    isReceiving: false,
 
     selectedItem: {},
 
@@ -41,6 +42,14 @@ document.addEventListener('alpine:init', () => {
     /* ======================================================================= */
     async init() {
       await this.loadData();
+      
+      // Clear selected items when switching to assign mode
+      // This prevents items selected for printing in view mode from appearing in sending summary
+      this.$watch('mode', (newMode) => {
+        if (newMode === 'assign') {
+          this.selectedItems = [];
+        }
+      });
     },
 
     async loadData() {
@@ -319,7 +328,9 @@ document.addEventListener('alpine:init', () => {
     /* CONFIRM RECEIVE */
     /* ======================================================================= */
     async confirmReceive() {
-      if (this.receivedList.length === 0) return;
+      if (this.receivedList.length === 0 || this.isReceiving) return;
+
+      this.isReceiving = true;
 
       try {
         const response = await fetch('{{ route('send_request.receive') }}', {
@@ -348,6 +359,7 @@ document.addEventListener('alpine:init', () => {
           
           await this.loadData();
           this.showConfirmModal = false;
+          this.receivedList = [];
         } else {
           throw new Error(data.message || 'Failed to mark items as received');
         }
@@ -362,6 +374,8 @@ document.addEventListener('alpine:init', () => {
         } else {
           alert('Error: ' + error.message);
         }
+      } finally {
+        this.isReceiving = false;
       }
     },
 
@@ -674,11 +688,28 @@ document.addEventListener('alpine:init', () => {
         const data = await response.json();
         
         if (data.success) {
+          // Automatically open PDF in new tab with all abaya entries
+          if (data.assigned_item_ids && data.assigned_item_ids.length > 0) {
+            try {
+              // Build query string with item IDs
+              const itemIds = data.assigned_item_ids;
+              const queryParams = itemIds.map(id => `item_ids[]=${encodeURIComponent(id)}`).join('&');
+              const exportUrl = '{{ route('send_request.export_pdf') }}?' + queryParams;
+              
+              // Open PDF in new tab
+              window.open(exportUrl, '_blank');
+            } catch (pdfError) {
+              console.error('Error opening PDF:', pdfError);
+              // Continue even if PDF opening fails
+            }
+          }
+          
           if (typeof Swal !== 'undefined') {
             Swal.fire({
               icon: 'success',
               title: data.message || '{{ trans('messages.abayas_sent_to_tailor', [], session('locale')) }}',
-              timer: 2000,
+              text: '{{ trans('messages.pdf_opened', [], session('locale')) ?: 'PDF will be opened in a new tab' }}',
+              timer: 3000,
               showConfirmButton: false
             });
           } else {

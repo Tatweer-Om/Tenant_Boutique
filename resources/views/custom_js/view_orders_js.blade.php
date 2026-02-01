@@ -217,6 +217,7 @@ document.addEventListener('alpine:init', () => {
         processing: '{{ trans('messages.in_progress', [], session('locale')) }}',
         ready: '{{ trans('messages.ready_for_delivery', [], session('locale')) }}',
         partially_ready: '{{ trans('messages.partially_ready', [], session('locale')) }}',
+        saved_in_stock: '{{ trans('messages.saved_in_stock', [], session('locale')) ?: 'Saved in Stock' }}',
         delivered: '{{ trans('messages.delivered', [], session('locale')) }}'
       };
       return labels[s] || '';
@@ -228,6 +229,7 @@ document.addEventListener('alpine:init', () => {
         processing: 'bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[11px] font-semibold',
         ready: 'bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-[11px] font-semibold',
         partially_ready: 'bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-[11px] font-semibold',
+        saved_in_stock: 'bg-green-100 text-green-700 px-3 py-1 rounded-full text-[11px] font-semibold',
         delivered: 'bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[11px] font-semibold'
       }[s] || 'bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-[11px] font-semibold';
     },
@@ -309,15 +311,7 @@ document.addEventListener('alpine:init', () => {
 
       // Validate account selection
       if (!this.selectedAccountId) {
-        if (typeof Swal !== 'undefined') {
-          Swal.fire({
-            icon: 'warning',
-            title: '{{ trans('messages.error', [], session('locale')) }}',
-            text: '{{ trans('messages.please_select_account', [], session('locale')) ?: 'Please select an account' }}'
-          });
-        } else {
-          alert('{{ trans('messages.please_select_account', [], session('locale')) ?: 'Please select an account' }}');
-        }
+        show_notification('error', '<?= trans("messages.please_select_account", [], session("locale")) ?>');
         return;
       }
 
@@ -382,6 +376,32 @@ document.addEventListener('alpine:init', () => {
     async confirmDeliverSingle() {
       if (!this.deliverOrder) return;
 
+      // For stock orders, show additional confirmation
+      if (this.deliverOrder.is_stock_order) {
+        let confirmed = false;
+        
+        if (typeof Swal !== 'undefined') {
+          const result = await Swal.fire({
+            title: '{{ trans('messages.confirm_save_to_stock_title', [], session('locale')) ?: 'Save to Stock?' }}',
+            text: '{{ trans('messages.confirm_save_to_stock_message', [], session('locale')) ?: 'Are you sure you want to save this order as stock? Items will be added to inventory with their color and size.' }}',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#10b981',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: '{{ trans('messages.yes_save_to_stock', [], session('locale')) ?: 'Yes, Save to Stock' }}',
+            cancelButtonText: '{{ trans('messages.cancel', [], session('locale')) }}'
+          });
+          confirmed = result.isConfirmed;
+        } else {
+          // Fallback to standard confirm
+          confirmed = confirm('{{ trans('messages.confirm_save_to_stock_message', [], session('locale')) ?: 'Are you sure you want to save this order as stock? Items will be added to inventory with their color and size.' }}');
+        }
+
+        if (!confirmed) {
+          return; // User cancelled
+        }
+      }
+
       try {
         const response = await fetch('{{ url('update_delivery_status') }}', {
           method: 'POST',
@@ -391,7 +411,8 @@ document.addEventListener('alpine:init', () => {
             'Accept': 'application/json'
           },
           body: JSON.stringify({
-            order_ids: [this.deliverOrder.id]
+            order_ids: [this.deliverOrder.id],
+            add_to_stock: this.deliverOrder.is_stock_order ? true : false
           })
         });
 
@@ -442,6 +463,66 @@ document.addEventListener('alpine:init', () => {
     async confirmBulkDeliver() {
       if (this.selectedReadyIds.length === 0) return;
 
+      // Check if any selected orders are stock orders
+      const selectedOrders = this.orders.filter(o => this.selectedReadyIds.includes(o.id));
+      const hasStockOrders = selectedOrders.some(o => o.is_stock_order);
+      
+      // Validate that all non-stock orders are fully paid
+      const notFullyPaidOrders = selectedOrders.filter(o => {
+        if (o.is_stock_order) return false; // Stock orders don't need payment
+        return Math.abs(o.total - o.paid) >= 0.001; // Check if not fully paid
+      });
+      
+      if (notFullyPaidOrders.length > 0) {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'error',
+            title: '{{ trans('messages.cannot_deliver_orders', [], session('locale')) ?: 'Cannot Deliver Orders' }}',
+            html: `${notFullyPaidOrders.length} {{ trans('messages.order_not_fully_paid_plural', [], session('locale')) ?: 'order(s) are not fully paid' }}. <br><br>{{ trans('messages.only_fully_paid_deliver', [], session('locale')) ?: 'Only fully paid orders can be delivered. Please pay the remaining amounts or remove these orders from selection.' }}`,
+            confirmButtonText: '{{ trans('messages.ok', [], session('locale')) ?: 'OK' }}'
+          });
+        } else {
+          alert(`${notFullyPaidOrders.length} order(s) are not fully paid. Only fully paid orders can be delivered.`);
+        }
+        
+        // Remove non-fully-paid orders from selection
+        notFullyPaidOrders.forEach(order => {
+          const idx = this.selectedReadyIds.indexOf(order.id);
+          if (idx > -1) {
+            this.selectedReadyIds.splice(idx, 1);
+          }
+        });
+        
+        return; // Stop the delivery process
+      }
+      
+      // For stock orders, show additional confirmation
+      if (hasStockOrders) {
+        const stockOrdersCount = selectedOrders.filter(o => o.is_stock_order).length;
+        let confirmed = false;
+        
+        if (typeof Swal !== 'undefined') {
+          const result = await Swal.fire({
+            title: '{{ trans('messages.confirm_save_to_stock_title', [], session('locale')) ?: 'Save to Stock?' }}',
+            text: `{{ trans('messages.confirm_save_to_stock_bulk_message', [], session('locale')) ?: 'Are you sure you want to save' }} ${stockOrdersCount} {{ trans('messages.stock_orders_to_inventory', [], session('locale')) ?: 'stock order(s) to inventory? Items will be added with their color and size.' }}`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#10b981',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: '{{ trans('messages.yes_save_to_stock', [], session('locale')) ?: 'Yes, Save to Stock' }}',
+            cancelButtonText: '{{ trans('messages.cancel', [], session('locale')) }}'
+          });
+          confirmed = result.isConfirmed;
+        } else {
+          // Fallback to standard confirm
+          confirmed = confirm(`{{ trans('messages.confirm_save_to_stock_bulk_message', [], session('locale')) ?: 'Are you sure you want to save' }} ${stockOrdersCount} {{ trans('messages.stock_orders_to_inventory', [], session('locale')) ?: 'stock order(s) to inventory? Items will be added with their color and size.' }}`);
+        }
+
+        if (!confirmed) {
+          return; // User cancelled
+        }
+      }
+
       try {
         const response = await fetch('{{ url('update_delivery_status') }}', {
           method: 'POST',
@@ -451,7 +532,8 @@ document.addEventListener('alpine:init', () => {
             'Accept': 'application/json'
           },
           body: JSON.stringify({
-            order_ids: this.selectedReadyIds
+            order_ids: this.selectedReadyIds,
+            add_to_stock: hasStockOrders ? true : false
           })
         });
 
@@ -481,7 +563,26 @@ document.addEventListener('alpine:init', () => {
           this.selectedReadyIds = [];
           this.showBulkDeliverModal = false;
         } else {
-          alert('Error: ' + (data.message || 'Failed to update delivery status'));
+          // If some orders were not fully paid, remove them from selection
+          if (data.not_fully_paid_order_ids && data.not_fully_paid_order_ids.length > 0) {
+            data.not_fully_paid_order_ids.forEach(orderId => {
+              const idx = this.selectedReadyIds.indexOf(orderId);
+              if (idx > -1) {
+                this.selectedReadyIds.splice(idx, 1);
+              }
+            });
+          }
+
+          if (typeof Swal !== 'undefined') {
+            Swal.fire({
+              icon: 'error',
+              title: '{{ trans('messages.error', [], session('locale')) }}',
+              text: data.message || '{{ trans('messages.failed_to_update_delivery', [], session('locale')) ?: 'Failed to update delivery status' }}',
+              confirmButtonText: '{{ trans('messages.ok', [], session('locale')) ?: 'OK' }}'
+            });
+          } else {
+            alert('Error: ' + (data.message || 'Failed to update delivery status'));
+          }
         }
       } catch (error) {
         console.error('Error:', error);
@@ -495,7 +596,23 @@ document.addEventListener('alpine:init', () => {
     },
 
     toggleReadySelection(order) {
-      if (order.status !== 'ready') return;
+      // Only allow selection if: status is ready, not a stock order, AND fully paid
+      if (order.status !== 'ready' || order.is_stock_order) return;
+      
+      // Check if order is fully paid (with tolerance for floating point comparison)
+      const isFullyPaid = Math.abs(order.total - order.paid) < 0.001;
+      if (!isFullyPaid) {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'warning',
+            title: '{{ trans('messages.cannot_select_order', [], session('locale')) ?: 'Cannot Select Order' }}',
+            text: '{{ trans('messages.order_not_fully_paid', [], session('locale')) ?: 'This order is not fully paid. Only fully paid orders can be delivered.' }}'
+          });
+        } else {
+          alert('{{ trans('messages.order_not_fully_paid', [], session('locale')) ?: 'This order is not fully paid. Only fully paid orders can be delivered.' }}');
+        }
+        return;
+      }
 
       const idx = this.selectedReadyIds.indexOf(order.id);
       if (idx > -1) {

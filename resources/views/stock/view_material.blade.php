@@ -41,14 +41,12 @@
     <!-- Desktop table -->
     <section class="hidden xl:block mt-6">
         <div class="rounded-2xl overflow-x-auto border border-pink-100 bg-white shadow-md hover:shadow-lg transition mx-auto" style="max-width: 100%;">
-            <table class="w-full text-sm min-w-[1400px] mx-auto">
+            <table class="w-full text-sm min-w-[900px] mx-auto">
                 <thead class="bg-gradient-to-l from-pink-50 to-pink-100 text-gray-800">
                     <tr>
                         <th class="text-center px-3 py-3 font-bold">{{ trans('messages.image', [], session('locale')) }} / {{ trans('messages.material_name', [], session('locale')) }}</th>
                         <th class="text-center px-3 py-3 font-bold">{{ trans('messages.unit', [], session('locale')) }} / {{ trans('messages.material_category', [], session('locale')) }}</th>
-                        <th class="text-center px-3 py-3 font-bold">{{ trans('messages.rolls_count', [], session('locale')) }}</th>
-                        <th class="text-center px-3 py-3 font-bold">{{ trans('messages.meters_per_roll', [], session('locale')) }}</th>
-                        <th class="text-center px-3 py-3 font-bold">{{ trans('messages.sale_price', [], session('locale')) }}</th>
+                        <th class="text-center px-3 py-3 font-bold">{{ trans('messages.total_meters_pieces', [], session('locale')) }}</th>
                         <th class="text-center px-3 py-3 font-bold">{{ trans('messages.buy_price', [], session('locale')) }}</th>
                         <th class="text-center px-3 py-3 font-bold">{{ trans('messages.action', [], session('locale')) }}</th>
 
@@ -71,7 +69,63 @@
     <ul id="material_pagination" class="material_pagination flex gap-2 list-none"></ul>
 </div>
 
+    <!-- Add Quantity Modal -->
+    <div id="addQuantityModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4">
+            <h2 class="text-xl font-bold mb-2 text-center text-gray-800" id="modalMaterialName"></h2>
+            
+            <!-- Current Total (Read-only) -->
+            <div class="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div class="flex justify-between items-center">
+                    <span class="text-sm font-medium text-gray-700">{{ trans('messages.total_meters_pieces', [], session('locale')) }}:</span>
+                    <span class="text-lg font-bold text-gray-900" id="currentTotalMeters"></span>
+                </div>
+            </div>
 
+            <!-- Form for Adding Quantity -->
+            <form id="addQuantityForm">
+                <input type="hidden" id="materialId" name="material_id">
+                
+                <div class="mb-4">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        @if(session('locale') == 'ar')
+                            إضافة أمتار/قطع
+                        @else
+                            Add Meters/Pieces
+                        @endif
+                    </label>
+                    <input type="number" 
+                           step="0.01"
+                           min="0.01"
+                           id="newMetersPieces" 
+                           name="new_meters_pieces" 
+                           class="w-full h-12 rounded-xl border-2 border-gray-300 focus:ring-2 focus:ring-[var(--primary-color)] focus:border-[var(--primary-color)] px-4 text-lg font-semibold"
+                           placeholder="0"
+                           required
+                           autofocus>
+                    <p class="text-xs text-gray-500 mt-2">
+                        @if(session('locale') == 'ar')
+                            سيتم إضافة هذه القيمة إلى القيمة الحالية
+                        @else
+                            This value will be added to the current total
+                        @endif
+                    </p>
+                </div>
+
+                <div class="flex justify-end gap-3 mt-6">
+                    <button type="button" 
+                            id="cancelAddQuantityBtn"
+                            class="px-6 py-2.5 bg-gray-200 hover:bg-gray-300 rounded-xl transition font-semibold">
+                        {{ trans('messages.cancel', [], session('locale')) }}
+                    </button>
+                    <button type="submit" 
+                            class="px-6 py-2.5 bg-[var(--primary-color)] hover:bg-[var(--primary-color-dark)] text-white rounded-xl transition font-semibold">
+                        {{ trans('messages.save', [], session('locale')) ?: 'Save' }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
 </main>
 

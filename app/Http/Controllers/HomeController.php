@@ -16,6 +16,8 @@ use App\Models\StockSize;
 use App\Models\Boutique;
 use App\Models\BoutiqueInvo;
 use App\Models\Settings;
+use App\Models\Expense;
+use App\Models\PosOrdersDetail;
 
 class HomeController extends Controller
 {
@@ -70,90 +72,248 @@ class HomeController extends Controller
     
     private function calculateTodayRevenue($date)
     {
-        // Special Orders revenue (delivered orders only)
-        $specialOrdersRevenue = SpecialOrder::where('status', 'delivered')
+        // Calculate actual profit, not revenue
+        
+        // POS Orders profit (sum of item_profit from details - matching POS income report)
+        $posOrders = PosOrders::whereDate('created_at', $date)
+            ->with('details')
+            ->get();
+        
+        $posProfit = 0;
+        foreach ($posOrders as $order) {
+            if ($order->details && $order->details->count() > 0) {
+                $posProfit += (float)$order->details->sum('item_profit');
+            } else {
+                // Fallback to stored profit if details not available
+                $posProfit += (float)($order->profit ?? 0);
+            }
+        }
+        
+        // Special Orders profit (delivered orders only)
+        // Profit = (Price - Cost Price - Tailor Charges) × Quantity
+        $specialOrders = SpecialOrder::where('status', 'delivered')
             ->whereDate('updated_at', $date)
-            ->sum('total_amount');
+            ->with(['items.stock'])
+            ->get();
         
-        // POS Orders revenue (exclude returns)
-        $posRevenue = PosOrders::where(function($q) {
-                $q->where('return_status', '!=', 'returned')
-                  ->orWhereNull('return_status');
-            })
-            ->whereDate('created_at', $date)
-            ->sum('total_amount');
+        $specialOrdersProfit = 0;
+        foreach ($specialOrders as $order) {
+            if ($order->items && $order->items->count() > 0) {
+                foreach ($order->items as $item) {
+                    $itemPrice = (float)($item->price ?? 0);
+                    $quantity = (int)($item->quantity ?? 0);
+                    
+                    $costPrice = 0;
+                    $tailorCharges = 0;
+                    if ($item->stock) {
+                        $costPrice = (float)($item->stock->cost_price ?? 0);
+                        $tailorCharges = (float)($item->stock->tailor_charges ?? 0);
+                    }
+                    
+                    $itemProfit = ($itemPrice - $costPrice - $tailorCharges) * $quantity;
+                    $specialOrdersProfit += $itemProfit;
+                }
+            }
+        }
         
-        // Settlements revenue (for today's date range)
-        $settlementsRevenue = Settlement::whereDate('created_at', $date)
-            ->sum('total_sales');
+        // Settlements profit
+        $settlements = Settlement::whereDate('created_at', $date)->get();
+        $settlementsProfit = 0;
+        foreach ($settlements as $settlement) {
+            $itemsData = $settlement->items_data;
+            // Handle JSON string if needed (for older records)
+            if (is_string($itemsData)) {
+                $itemsData = json_decode($itemsData, true);
+            }
+            if (is_array($itemsData)) {
+                foreach ($itemsData as $item) {
+                    $soldQty = (int)($item['sold'] ?? 0);
+                    if ($soldQty > 0) {
+                        $abayaCode = $item['code'] ?? '';
+                        $stock = Stock::where('abaya_code', $abayaCode)->first();
+                        if ($stock) {
+                            $salesPrice = (float)($stock->sales_price ?? 0);
+                            $costPrice = (float)($stock->cost_price ?? 0);
+                            $tailorCharges = (float)($stock->tailor_charges ?? 0);
+                            $itemProfit = ($salesPrice - $costPrice - $tailorCharges) * $soldQty;
+                            $settlementsProfit += $itemProfit;
+                        }
+                    }
+                }
+            }
+        }
         
-        return floatval($specialOrdersRevenue) + floatval($posRevenue) + floatval($settlementsRevenue);
+        return floatval($posProfit) + floatval($specialOrdersProfit) + floatval($settlementsProfit);
     }
     
     private function calculateTodayExpenses($date)
     {
         // POS Orders delivery charges (if delivery_paid is true or 1)
-        $posDeliveryCharges = PosOrders::where(function($q) {
-                $q->where('return_status', '!=', 'returned')
-                  ->orWhereNull('return_status');
-            })
-            ->whereDate('created_at', $date)
-            ->where(function($q) {
-                $q->where('delivery_paid', 1)
-                  ->orWhere('delivery_paid', true);
-            })
-            ->sum('delivery_charges');
+        // $posDeliveryCharges = PosOrders::whereDate('created_at', $date)
+        //     ->where(function($q) {
+        //         $q->where('delivery_paid', 1)
+        //           ->orWhere('delivery_paid', true);
+        //     })
+        //     ->sum('delivery_charges');
         
         // Special Orders shipping fees (if order is delivered, consider shipping fee as expense)
-        $specialOrdersShipping = SpecialOrder::where('status', 'delivered')
-            ->whereDate('updated_at', $date)
-            ->sum('shipping_fee');
+        // $specialOrdersShipping = SpecialOrder::where('status', 'delivered')
+        //     ->whereDate('updated_at', $date)
+        //     ->sum('shipping_fee');
         
-        return floatval($posDeliveryCharges) + floatval($specialOrdersShipping);
+        // Expenses from Expense table
+        $expensesFromTable = Expense::whereDate('expense_date', $date)
+            ->sum('amount');
+        
+        // Boutique rent payments (status = '4' means paid, payment_date must not be null)
+        $boutiqueRentPayments = BoutiqueInvo::where(function($q) {
+                $q->where('status', '4')
+                  ->orWhere('status', 4);
+            })
+            ->whereNotNull('payment_date')
+            ->whereDate('payment_date', $date)
+            ->get()
+            ->sum(function($invoice) {
+                return floatval($invoice->total_amount ?? 0);
+            });
+
+        // Maintenance expenses (company bearer): delivery + repair costs
+        $maintenanceCompanyDelivery = SpecialOrderItem::where('maintenance_status', 'delivered')
+            ->where('maintenance_cost_bearer', 'company')
+            ->whereNotNull('repaired_delivered_at')
+            ->whereDate('repaired_delivered_at', $date)
+            ->sum('maintenance_delivery_charges');
+        $maintenanceCompanyRepair = SpecialOrderItem::where('maintenance_status', 'delivered')
+            ->where('maintenance_cost_bearer', 'company')
+            ->whereNotNull('repaired_delivered_at')
+            ->whereDate('repaired_delivered_at', $date)
+            ->sum('maintenance_repair_cost');
+        $maintenanceCompanyExpenses = floatval($maintenanceCompanyDelivery) + floatval($maintenanceCompanyRepair);
+        
+        return floatval($expensesFromTable) + floatval($boutiqueRentPayments) + floatval($maintenanceCompanyExpenses);
     }
     
     private function calculateMonthRevenue($startDate, $endDate)
     {
-        // Special Orders revenue (delivered orders only)
-        $specialOrdersRevenue = SpecialOrder::where('status', 'delivered')
+        // Calculate actual profit, not revenue
+        
+        // POS Orders profit (sum of item_profit from details - matching POS income report)
+        $posOrders = PosOrders::whereBetween('created_at', [$startDate, $endDate])
+            ->with('details')
+            ->get();
+        
+        $posProfit = 0;
+        foreach ($posOrders as $order) {
+            if ($order->details && $order->details->count() > 0) {
+                $posProfit += (float)$order->details->sum('item_profit');
+            } else {
+                // Fallback to stored profit if details not available
+                $posProfit += (float)($order->profit ?? 0);
+            }
+        }
+        
+        // Special Orders profit (delivered orders only)
+        // Profit = (Price - Cost Price - Tailor Charges) × Quantity
+        $specialOrders = SpecialOrder::where('status', 'delivered')
             ->whereBetween('updated_at', [$startDate, $endDate])
-            ->sum('total_amount');
+            ->with(['items.stock'])
+            ->get();
         
-        // POS Orders revenue (exclude returns)
-        $posRevenue = PosOrders::where(function($q) {
-                $q->where('return_status', '!=', 'returned')
-                  ->orWhereNull('return_status');
-            })
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->sum('total_amount');
+        $specialOrdersProfit = 0;
+        foreach ($specialOrders as $order) {
+            if ($order->items && $order->items->count() > 0) {
+                foreach ($order->items as $item) {
+                    $itemPrice = (float)($item->price ?? 0);
+                    $quantity = (int)($item->quantity ?? 0);
+                    
+                    $costPrice = 0;
+                    $tailorCharges = 0;
+                    if ($item->stock) {
+                        $costPrice = (float)($item->stock->cost_price ?? 0);
+                        $tailorCharges = (float)($item->stock->tailor_charges ?? 0);
+                    }
+                    
+                    $itemProfit = ($itemPrice - $costPrice - $tailorCharges) * $quantity;
+                    $specialOrdersProfit += $itemProfit;
+                }
+            }
+        }
         
-        // Settlements revenue
-        $settlementsRevenue = Settlement::whereBetween('created_at', [$startDate, $endDate])
-            ->sum('total_sales');
+        // Settlements profit
+        $settlements = Settlement::whereBetween('created_at', [$startDate, $endDate])->get();
+        $settlementsProfit = 0;
+        foreach ($settlements as $settlement) {
+            $itemsData = $settlement->items_data;
+            // Handle JSON string if needed (for older records)
+            if (is_string($itemsData)) {
+                $itemsData = json_decode($itemsData, true);
+            }
+            if (is_array($itemsData)) {
+                foreach ($itemsData as $item) {
+                    $soldQty = (int)($item['sold'] ?? 0);
+                    if ($soldQty > 0) {
+                        $abayaCode = $item['code'] ?? '';
+                        $stock = Stock::where('abaya_code', $abayaCode)->first();
+                        if ($stock) {
+                            $salesPrice = (float)($stock->sales_price ?? 0);
+                            $costPrice = (float)($stock->cost_price ?? 0);
+                            $tailorCharges = (float)($stock->tailor_charges ?? 0);
+                            $itemProfit = ($salesPrice - $costPrice - $tailorCharges) * $soldQty;
+                            $settlementsProfit += $itemProfit;
+                        }
+                    }
+                }
+            }
+        }
         
-        return floatval($specialOrdersRevenue) + floatval($posRevenue) + floatval($settlementsRevenue);
+        return floatval($posProfit) + floatval($specialOrdersProfit) + floatval($settlementsProfit);
     }
     
     private function calculateMonthExpenses($startDate, $endDate)
     {
         // POS Orders delivery charges (if delivery_paid is true or 1)
-        $posDeliveryCharges = PosOrders::where(function($q) {
-                $q->where('return_status', '!=', 'returned')
-                  ->orWhereNull('return_status');
-            })
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->where(function($q) {
-                $q->where('delivery_paid', 1)
-                  ->orWhere('delivery_paid', true);
-            })
-            ->sum('delivery_charges');
+        // $posDeliveryCharges = PosOrders::whereBetween('created_at', [$startDate, $endDate])
+        //     ->where(function($q) {
+        //         $q->where('delivery_paid', 1)
+        //           ->orWhere('delivery_paid', true);
+        //     })
+        //     ->sum('delivery_charges');
         
         // Special Orders shipping fees (if order is delivered)
-        $specialOrdersShipping = SpecialOrder::where('status', 'delivered')
-            ->whereBetween('updated_at', [$startDate, $endDate])
-            ->sum('shipping_fee');
+        // $specialOrdersShipping = SpecialOrder::where('status', 'delivered')
+        //     ->whereBetween('updated_at', [$startDate, $endDate])
+        //     ->sum('shipping_fee');
         
-        return floatval($posDeliveryCharges) + floatval($specialOrdersShipping);
+        // Expenses from Expense table
+        $expensesFromTable = Expense::whereBetween('expense_date', [$startDate, $endDate])
+            ->sum('amount');
+        
+        // Boutique rent payments (status = '4' means paid, payment_date must not be null)
+        $boutiqueRentPayments = BoutiqueInvo::where(function($q) {
+                $q->where('status', '4')
+                  ->orWhere('status', 4);
+            })
+            ->whereNotNull('payment_date')
+            ->whereBetween('payment_date', [$startDate, $endDate])
+            ->get()
+            ->sum(function($invoice) {
+                return floatval($invoice->total_amount ?? 0);
+            });
+
+        // Maintenance expenses (company bearer): delivery + repair costs
+        $maintenanceCompanyDelivery = SpecialOrderItem::where('maintenance_status', 'delivered')
+            ->where('maintenance_cost_bearer', 'company')
+            ->whereNotNull('repaired_delivered_at')
+            ->whereBetween('repaired_delivered_at', [$startDate, $endDate])
+            ->sum('maintenance_delivery_charges');
+        $maintenanceCompanyRepair = SpecialOrderItem::where('maintenance_status', 'delivered')
+            ->where('maintenance_cost_bearer', 'company')
+            ->whereNotNull('repaired_delivered_at')
+            ->whereBetween('repaired_delivered_at', [$startDate, $endDate])
+            ->sum('maintenance_repair_cost');
+        $maintenanceCompanyExpenses = floatval($maintenanceCompanyDelivery) + floatval($maintenanceCompanyRepair);
+        
+        return floatval($expensesFromTable) + floatval($boutiqueRentPayments) + floatval($maintenanceCompanyExpenses);
     }
     
     private function calculateMonthlyData($year)
@@ -314,134 +474,219 @@ class HomeController extends Controller
         try {
             $reminders = [];
             $now = Carbon::now();
+            $today = $now->copy()->startOfDay();
+            $locale = session('locale', 'en');
+
+            // Helpers for month normalization (boutique_invos has mixed formats historically)
+            $normalizeMonthToYm = function (?string $month): ?string {
+                $month = trim((string)$month);
+                if ($month === '') return null;
+                if (preg_match('/^\d{4}-\d{2}$/', $month)) return $month; // Y-m
+                if (preg_match('/^\d{2}-\d{4}$/', $month)) { // m-Y
+                    [$m, $y] = explode('-', $month);
+                    return $y . '-' . $m;
+                }
+                try {
+                    return Carbon::parse($month)->format('Y-m');
+                } catch (\Throwable $e) {
+                    return null;
+                }
+            };
+            $formatYmToMY = function (string $ym): string {
+                try {
+                    return Carbon::createFromFormat('Y-m', $ym)->format('m-Y');
+                } catch (\Throwable $e) {
+                    return $ym;
+                }
+            };
             
             // Get all active boutiques
             $boutiques = Boutique::where('status', '1') // Active boutiques
                 ->whereNotNull('monthly_rent')
                 ->whereNotNull('rent_date')
                 ->get();
-            
+
+            // Preload all invoices for these boutiques (reduce queries)
+            $boutiqueIds = $boutiques->pluck('id')->map(fn($x) => (string)$x)->values()->all();
+            $allInvoices = BoutiqueInvo::whereIn('boutique_id', $boutiqueIds)->get();
+            $invoicesByBoutique = [];
+            foreach ($allInvoices as $inv) {
+                $bid = (string)($inv->boutique_id ?? '');
+                if ($bid === '') continue;
+                if (!isset($invoicesByBoutique[$bid])) $invoicesByBoutique[$bid] = collect();
+                $invoicesByBoutique[$bid]->push($inv);
+            }
+
+            $unpaidItems = [];
+            $upcomingItems = [];
+
             foreach ($boutiques as $boutique) {
-                $rentDate = Carbon::parse($boutique->rent_date);
+                $rentStartDate = Carbon::parse($boutique->rent_date)->startOfDay();
                 $monthlyRent = floatval($boutique->monthly_rent ?? 0);
                 
                 if ($monthlyRent <= 0) {
                     continue;
                 }
-                
-                // Extract day from rent_date (ignoring year)
-                $paymentDay = $rentDate->day;
-                
-                // Calculate notification day (10 days before payment day)
-                // If result is <= 0, use 1st of the month
-                $notificationDay = max(1, $paymentDay - 10);
-                
-                // Generate reminders for previous month, current month, and next 2 months
-                for ($i = -1; $i < 3; $i++) {
-                    $currentMonth = $now->copy()->addMonths($i);
-                    $monthKey = $currentMonth->format('Y-m');
-                    $monthName = $currentMonth->format('F Y');
-                    
-                    // Calculate payment date for this month (same day, current month)
-                    $paymentDate = Carbon::create($currentMonth->year, $currentMonth->month, $paymentDay);
-                    // If payment day doesn't exist in this month (e.g., Feb 30), use last day of month
-                    if ($paymentDate->day != $paymentDay) {
-                        $paymentDate = $currentMonth->copy()->endOfMonth();
+
+                // Rent due dates start monthly AFTER the rent start date.
+                // Example: rent start = 01-01-2026, next due = 01-02-2026.
+                $dueDate = $rentStartDate->copy()->addMonthNoOverflow();
+                while ($dueDate->lt($today)) {
+                    // Keep same day-of-month where possible, otherwise use last valid day
+                    $dueDate->addMonthNoOverflow();
+                }
+
+                $daysUntilDue = $today->diffInDays($dueDate, false);
+
+                $boutiqueInvoiceList = $invoicesByBoutique[(string)$boutique->id] ?? collect();
+
+                // Build map: ym => ['paid' => bool, 'unpaid' => bool, 'any' => Collection]
+                $invoiceMap = [];
+                foreach ($boutiqueInvoiceList as $inv) {
+                    $ym = $normalizeMonthToYm($inv->month);
+                    if (!$ym) continue;
+                    if (!isset($invoiceMap[$ym])) {
+                        $invoiceMap[$ym] = [
+                            'paid' => false,
+                            'unpaid' => false,
+                            'list' => collect(),
+                        ];
                     }
-                    
-                    // Calculate notification date for this month (notification day of current month)
-                    $notificationDate = Carbon::create($currentMonth->year, $currentMonth->month, $notificationDay);
-                    
-                    // Get invoice for this month
-                    $invoice = BoutiqueInvo::where('boutique_id', (string)$boutique->id)
-                        ->where('month', $monthKey)
-                        ->first();
-                    
-                    // Determine status
-                    $status = 'upcoming';
-                    $statusClass = 'ok';
-                    $statusText = trans('messages.upcoming', [], session('locale')) ?: 'Upcoming';
-                    $daysRemaining = null;
-                    
-                    if ($invoice) {
-                        if ($invoice->status == '4') {
-                            // Paid
-                            $status = 'paid';
-                            $statusClass = 'ok';
-                            $statusText = trans('messages.paid', [], session('locale'));
-                        } else if ($invoice->status == '5') {
-                            // Unpaid
-                            $status = 'unpaid';
-                            $statusClass = 'danger';
-                            $statusText = trans('messages.unpaid', [], session('locale'));
-                        } else {
-                            // Pending
-                            $status = 'pending';
-                            $statusClass = 'warn';
-                            $statusText = trans('messages.pending', [], session('locale')) ?: 'Pending';
+                    $invoiceMap[$ym]['list']->push($inv);
+                    if ((string)($inv->status ?? '') === '4' || (int)($inv->status ?? 0) === 4) {
+                        $invoiceMap[$ym]['paid'] = true;
+                    } elseif ((string)($inv->status ?? '') === '5' || (int)($inv->status ?? 0) === 5) {
+                        $invoiceMap[$ym]['unpaid'] = true;
+                    }
+                }
+
+                // Ensure monthly invoices exist moving forward from rent start date (up to upcoming due month)
+                // and collect any unpaid/overdue months.
+                $checkDate = $rentStartDate->copy()->addMonthNoOverflow(); // first invoice month after start
+                while ($checkDate->lte($dueDate)) {
+                    $ym = $checkDate->format('Y-m');
+                    $mY = $checkDate->format('m-Y');
+
+                    // Create invoice if missing for this month (support both formats)
+                    $exists = isset($invoiceMap[$ym]) && $invoiceMap[$ym]['list']->count() > 0;
+                    if (!$exists) {
+                        $newInv = new BoutiqueInvo();
+                        $newInv->boutique_id = (string)$boutique->id;
+                        $newInv->boutique_name = $boutique->boutique_name;
+                        $newInv->month = $mY; // boutique module format
+                        $newInv->payment_date = null;
+                        $newInv->status = '5'; // unpaid
+                        $newInv->total_amount = $monthlyRent;
+                        $newInv->added_by = 'system';
+                        $newInv->user_id = 1;
+                        $newInv->save();
+
+                        $invoiceMap[$ym] = [
+                            'paid' => false,
+                            'unpaid' => true,
+                            'list' => collect([$newInv]),
+                        ];
+                    }
+
+                    // If this due date month is in the past (overdue) and not paid, show as unpaid
+                    if ($checkDate->lt($today)) {
+                        $isPaid = $invoiceMap[$ym]['paid'] ?? false;
+                        if (!$isPaid) {
+                            $daysOverdue = $today->diffInDays($checkDate, false); // negative number
+                            $unpaidItems[] = [
+                                'id' => $boutique->id,
+                                'boutique_name' => $boutique->boutique_name,
+                                'amount' => $monthlyRent,
+                                'month' => $mY,
+                                'month_name' => $checkDate->format('F Y'),
+                                'payment_date' => $checkDate->format('Y-m-d'), // due date
+                                'payment_date_formatted' => $checkDate->format('d/m/Y'),
+                                'notification_date' => $checkDate->copy()->subDays(10)->format('Y-m-d'),
+                                'notification_date_formatted' => $checkDate->copy()->subDays(10)->format('d/m/Y'),
+                                'days_remaining' => (int)$daysOverdue, // negative => overdue in UI
+                                'status' => 'unpaid',
+                                'status_class' => 'danger',
+                                'status_text' => trans('messages.unpaid', [], $locale) ?: 'Unpaid',
+                            ];
                         }
-                    } else {
-                        // No invoice yet - check if it's time to show notification
-                        $daysUntilNotification = $now->diffInDays($notificationDate, false);
-                        $daysUntilPayment = $now->diffInDays($paymentDate, false);
-                        
-                        if ($daysUntilPayment < 0) {
-                            // Payment date has passed - show as unpaid
-                            $status = 'unpaid';
-                            $statusClass = 'danger';
-                            $statusText = trans('messages.unpaid', [], session('locale'));
-                        } else if ($daysUntilNotification <= 0 && $daysUntilPayment >= 0) {
-                            // Within notification period
-                            $status = 'upcoming';
-                            $statusClass = 'warn';
-                            $statusText = trans('messages.upcoming', [], session('locale')) ?: 'Upcoming';
-                            // Round up to at least 1 day if less than 1
-                            $daysRemaining = max(1, (int)ceil($daysUntilPayment));
-                        } else if ($daysUntilNotification > 0) {
-                            // Too early to show
-                            continue;
-                        }
                     }
-                    
-                    // Include if it's unpaid, pending, paid, or within notification period
-                    // Always show unpaid and pending
-                    // Show paid only if it's current or previous month
-                    // Show upcoming only if within notification period
-                    $shouldInclude = false;
-                    
-                    if ($status === 'unpaid' || $status === 'pending') {
-                        $shouldInclude = true;
-                    } else if ($status === 'paid' && ($i <= 1)) {
-                        // Show paid for current month and previous month
-                        $shouldInclude = true;
-                    } else if ($status === 'upcoming' && $daysRemaining !== null) {
-                        $shouldInclude = true;
-                    }
-                    
-                    if ($shouldInclude) {
-                        $reminders[] = [
+
+                    $checkDate->addMonthNoOverflow();
+                }
+
+                // Upcoming due reminder: only within 10 days window, and only if not paid
+                if ($daysUntilDue >= 0 && $daysUntilDue <= 10) {
+                    $ymDue = $dueDate->format('Y-m');
+                    $mYDue = $dueDate->format('m-Y');
+                    $isPaidUpcoming = isset($invoiceMap[$ymDue]) ? ($invoiceMap[$ymDue]['paid'] ?? false) : false;
+                    if (!$isPaidUpcoming) {
+                        $upcomingItems[] = [
                             'id' => $boutique->id,
                             'boutique_name' => $boutique->boutique_name,
                             'amount' => $monthlyRent,
-                            'month' => $monthKey,
-                            'month_name' => $monthName,
-                            'payment_date' => $paymentDate->format('Y-m-d'),
-                            'payment_date_formatted' => $paymentDate->format('d/m/Y'),
-                            'notification_date' => $notificationDate->format('Y-m-d'),
-                            'notification_date_formatted' => $notificationDate->format('d/m/Y'),
-                            'days_remaining' => $daysRemaining,
-                            'status' => $status,
-                            'status_class' => $statusClass,
-                            'status_text' => $statusText,
+                            'month' => $mYDue,
+                            'month_name' => $dueDate->format('F Y'),
+                            'payment_date' => $dueDate->format('Y-m-d'), // due date
+                            'payment_date_formatted' => $dueDate->format('d/m/Y'),
+                            'notification_date' => $dueDate->copy()->subDays(10)->format('Y-m-d'),
+                            'notification_date_formatted' => $dueDate->copy()->subDays(10)->format('d/m/Y'),
+                            'days_remaining' => (int)$daysUntilDue,
+                            'status' => 'upcoming',
+                            'status_class' => 'warn',
+                            'status_text' => trans('messages.upcoming', [], $locale) ?: 'Upcoming',
                         ];
                     }
                 }
             }
-            
-            // Sort by payment date (earliest first)
-            usort($reminders, function($a, $b) {
+
+            // Recent 4 paid invoices (history) + always show any unpaid invoices
+            $paidHistory = [];
+            $recentPaid = BoutiqueInvo::where(function ($q) {
+                    $q->where('status', '4')->orWhere('status', 4);
+                })
+                ->orderBy('payment_date', 'desc')
+                ->orderBy('id', 'desc')
+                ->limit(4)
+                ->get();
+
+            foreach ($recentPaid as $inv) {
+                $ym = $normalizeMonthToYm($inv->month);
+                $monthDisplay = $ym ? $formatYmToMY($ym) : ($inv->month ?? '—');
+                $monthName = $ym ? Carbon::createFromFormat('Y-m', $ym)->format('F Y') : ($inv->month ?? '—');
+
+                $paidDate = null;
+                try {
+                    $paidDate = $inv->payment_date ? Carbon::parse($inv->payment_date) : null;
+                } catch (\Throwable $e) {
+                    $paidDate = null;
+                }
+
+                $paidHistory[] = [
+                    'id' => (int)($inv->boutique_id ?? 0),
+                    'boutique_name' => $inv->boutique_name ?? '—',
+                    'amount' => (float)($inv->total_amount ?? 0),
+                    'month' => $monthDisplay,
+                    'month_name' => $monthName,
+                    'payment_date' => $paidDate ? $paidDate->format('Y-m-d') : null,
+                    'payment_date_formatted' => $paidDate ? $paidDate->format('d/m/Y') : '—',
+                    'notification_date' => null,
+                    'notification_date_formatted' => null,
+                    'days_remaining' => null,
+                    'status' => 'paid',
+                    'status_class' => 'ok',
+                    'status_text' => trans('messages.paid', [], $locale) ?: 'Paid',
+                ];
+            }
+
+            // Sort unpaid by due date ascending (oldest first), upcoming by due date ascending
+            usort($unpaidItems, function ($a, $b) {
                 return strtotime($a['payment_date']) <=> strtotime($b['payment_date']);
             });
+            usort($upcomingItems, function ($a, $b) {
+                return strtotime($a['payment_date']) <=> strtotime($b['payment_date']);
+            });
+
+            $reminders = array_merge($unpaidItems, $upcomingItems, $paidHistory);
             
             return response()->json([
                 'success' => true,

@@ -25,7 +25,7 @@
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               <div>
                 <p class="text-gray-500 text-xs mb-1">{{ trans('messages.order_number', [], session('locale')) }}</p>
-                <p class="font-bold text-lg" x-text="viewOrder.order_no || viewOrder.id"></p>
+                <p class="font-bold text-lg" x-text="viewOrder.special_order_no || viewOrder.order_no || viewOrder.id"></p>
               </div>
               <div>
                 <p class="text-gray-500 text-xs mb-1">{{ trans('messages.customer_name', [], session('locale')) }}</p>
@@ -78,6 +78,23 @@
                               {{ trans('messages.code', [], session('locale')) }}: 
                               <span class="font-semibold" x-text="item.abaya_code"></span>
                             </p>
+                            <!-- Show color and size for stock orders -->
+                            <template x-if="viewOrder.is_stock_order && (item.color_name || item.size_name)">
+                              <div class="flex flex-wrap gap-3 mt-2">
+                                <template x-if="item.color_name">
+                                  <p class="text-gray-600 text-xs">
+                                    <span class="text-gray-500">{{ trans('messages.color', [], session('locale')) }}: </span>
+                                    <span class="font-semibold" x-text="item.color_name"></span>
+                                  </p>
+                                </template>
+                                <template x-if="item.size_name">
+                                  <p class="text-gray-600 text-xs">
+                                    <span class="text-gray-500">{{ trans('messages.size', [], session('locale')) }}: </span>
+                                    <span class="font-semibold" x-text="item.size_name"></span>
+                                  </p>
+                                </template>
+                              </div>
+                            </template>
                           </div>
                           <!-- حالة الصنف -->
                           <div class="flex flex-col items-end gap-1">
@@ -135,25 +152,45 @@
                           </div>
                         </template>
 
-                        <!-- المقاسات -->
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t border-gray-100">
-                          <div>
-                            <p class="text-gray-500 text-xs">{{ trans('messages.abaya_length', [], session('locale')) }}</p>
-                            <p class="font-semibold" x-text="item.length ? item.length + ' {{ trans('messages.inches', [], session('locale')) }}' : '{{ trans('messages.not_available', [], session('locale')) }}'"></p>
+                        <!-- Measurements (for customer orders) or Color/Size (for stock orders) -->
+                        <template x-if="!viewOrder.is_stock_order">
+                          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t border-gray-100">
+                            <div>
+                              <p class="text-gray-500 text-xs">{{ trans('messages.abaya_length', [], session('locale')) }}</p>
+                              <p class="font-semibold" x-text="item.length ? item.length + ' {{ trans('messages.inches', [], session('locale')) }}' : '{{ trans('messages.not_available', [], session('locale')) }}'"></p>
+                            </div>
+                            <div>
+                              <p class="text-gray-500 text-xs">{{ trans('messages.bust_one_side', [], session('locale')) }}</p>
+                              <p class="font-semibold" x-text="item.bust ? item.bust + ' {{ trans('messages.inches', [], session('locale')) }}' : '{{ trans('messages.not_available', [], session('locale')) }}'"></p>
+                            </div>
+                            <div>
+                              <p class="text-gray-500 text-xs">{{ trans('messages.sleeves_length', [], session('locale')) }}</p>
+                              <p class="font-semibold" x-text="item.sleeves ? item.sleeves + ' {{ trans('messages.inches', [], session('locale')) }}' : '{{ trans('messages.not_available', [], session('locale')) }}'"></p>
+                            </div>
+                            <div>
+                              <p class="text-gray-500 text-xs">{{ trans('messages.buttons', [], session('locale')) }}</p>
+                              <p class="font-semibold" x-text="item.buttons ? '{{ trans('messages.yes', [], session('locale')) }}' : '{{ trans('messages.no', [], session('locale')) }}'"></p>
+                            </div>
                           </div>
-                          <div>
-                            <p class="text-gray-500 text-xs">{{ trans('messages.bust_one_side', [], session('locale')) }}</p>
-                            <p class="font-semibold" x-text="item.bust ? item.bust + ' {{ trans('messages.inches', [], session('locale')) }}' : '{{ trans('messages.not_available', [], session('locale')) }}'"></p>
+                        </template>
+                        
+                        <!-- Color and Size for Stock Orders -->
+                        <template x-if="viewOrder.is_stock_order">
+                          <div class="grid grid-cols-2 gap-3 pt-2 border-t border-gray-100">
+                            <template x-if="item.color_name">
+                              <div>
+                                <p class="text-gray-500 text-xs">{{ trans('messages.color', [], session('locale')) }}</p>
+                                <p class="font-semibold text-indigo-600" x-text="item.color_name"></p>
+                              </div>
+                            </template>
+                            <template x-if="item.size_name">
+                              <div>
+                                <p class="text-gray-500 text-xs">{{ trans('messages.size', [], session('locale')) }}</p>
+                                <p class="font-semibold text-indigo-600" x-text="item.size_name"></p>
+                              </div>
+                            </template>
                           </div>
-                          <div>
-                            <p class="text-gray-500 text-xs">{{ trans('messages.sleeves_length', [], session('locale')) }}</p>
-                            <p class="font-semibold" x-text="item.sleeves ? item.sleeves + ' {{ trans('messages.inches', [], session('locale')) }}' : '{{ trans('messages.not_available', [], session('locale')) }}'"></p>
-                          </div>
-                          <div>
-                            <p class="text-gray-500 text-xs">{{ trans('messages.buttons', [], session('locale')) }}</p>
-                            <p class="font-semibold" x-text="item.buttons ? '{{ trans('messages.yes', [], session('locale')) }}' : '{{ trans('messages.no', [], session('locale')) }}'"></p>
-                          </div>
-                        </div>
+                        </template>
 
                         <!-- ملاحظات الصنف -->
                         <template x-if="item.notes">
@@ -322,11 +359,26 @@
 
       <h2 class="text-xl font-bold mb-4">{{ trans('messages.confirm_delivery', [], session('locale')) }}</h2>
 
-      <p class="text-gray-700 leading-6 mb-6">
-        {{ trans('messages.confirm_delivery_message', [], session('locale')) }}
-        <br>
-        <span class="text-xs text-gray-500">{{ trans('messages.delivery_status_change', [], session('locale')) }}</span>
-      </p>
+      <!-- Stock Order Confirmation -->
+      <template x-if="deliverOrder && deliverOrder.is_stock_order">
+        <div class="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+          <p class="text-amber-800 font-semibold mb-2">
+            {{ trans('messages.stock_order_warning', [], session('locale')) ?: '⚠️ Stock Special Order' }}
+          </p>
+          <p class="text-gray-700 leading-6 mb-4">
+            {{ trans('messages.confirm_save_to_stock', [], session('locale')) ?: 'Are you sure you want to save this order as stock? Items will be added to inventory with their color and size.' }}
+          </p>
+        </div>
+      </template>
+
+      <!-- Regular Delivery Message -->
+      <template x-if="!deliverOrder || !deliverOrder.is_stock_order">
+        <p class="text-gray-700 leading-6 mb-6">
+          {{ trans('messages.confirm_delivery_message', [], session('locale')) }}
+          <br>
+          <span class="text-xs text-gray-500">{{ trans('messages.delivery_status_change', [], session('locale')) }}</span>
+        </p>
+      </template>
 
       <div class="flex justify-end gap-3">
         <button @click="showDeliverModal=false"
@@ -351,6 +403,26 @@
          class="bg-white w-full max-w-md mx-4 rounded-2xl shadow-2xl p-6">
 
       <h2 class="text-xl font-bold mb-4">{{ trans('messages.bulk_delivery', [], session('locale')) }}</h2>
+
+      <!-- Stock Orders Warning -->
+      <template x-if="selectedReadyIds.length > 0">
+        <div x-data="{
+          getStockOrdersCount() {
+            return orders.filter(o => selectedReadyIds.includes(o.id) && o.is_stock_order).length;
+          }
+        }">
+          <template x-if="getStockOrdersCount() > 0">
+            <div class="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+              <p class="text-amber-800 font-semibold mb-2">
+                {{ trans('messages.stock_orders_in_selection', [], session('locale')) ?: '⚠️ Stock Orders Selected' }}
+              </p>
+              <p class="text-gray-700 text-sm">
+                <span x-text="getStockOrdersCount()"></span> {{ trans('messages.stock_orders_will_be_saved', [], session('locale')) ?: 'stock order(s) will be saved to inventory with color and size.' }}
+              </p>
+            </div>
+          </template>
+        </div>
+      </template>
 
       <p class="text-gray-700 leading-6 mb-6">
         {{ trans('messages.bulk_delivery_message', [], session('locale')) }}
@@ -466,6 +538,7 @@
       <button @click="filter='new'" :class="tabClass('new')">{{ trans('messages.new', [], session('locale')) }}</button>
       <button @click="filter='processing'" :class="tabClass('processing')">{{ trans('messages.in_progress', [], session('locale')) }}</button>
       <button @click="filter='ready'" :class="tabClass('ready')">{{ trans('messages.ready_for_delivery', [], session('locale')) }}</button>
+      <button @click="filter='saved_in_stock'" :class="tabClass('saved_in_stock')">{{ trans('messages.saved_in_stock', [], session('locale')) ?: 'Saved in Stock' }}</button>
       <button @click="filter='delivered'" :class="tabClass('delivered')">{{ trans('messages.delivered', [], session('locale')) }}</button>
 
       <span class="mx-2 border-r-2 border-gray-300 hidden md:inline-block"></span>
@@ -507,9 +580,10 @@
               <!-- checkbox -->
               <td class="py-3 px-3 sm:px-4 md:px-6 text-center whitespace-nowrap">
                 <input type="checkbox"
-                       :disabled="order.status !== 'ready'"
+                       :disabled="order.status !== 'ready' || order.is_stock_order || (order.total - order.paid > 0.001)"
                        :checked="isReadySelected(order.id)"
                        @change="toggleReadySelection(order)"
+                       :title="(order.total - order.paid > 0.001) ? '{{ trans('messages.order_not_fully_paid', [], session('locale')) ?: 'Order not fully paid' }}' : ''"
                        class="w-4 h-4 text-indigo-600">
               </td>
 
@@ -548,12 +622,15 @@
                     <span class="material-symbols-outlined text-base">print</span>
                   </button>
 
-                  <button @click="openPaymentModal(order)"
+                  <button x-show="!order.is_stock_order"
+                          @click="openPaymentModal(order)"
                           class="text-emerald-600 hover:text-emerald-800">
                     <span class="material-symbols-outlined text-base">payments</span>
                   </button>
 
-                  <button @click="openDeliverModal(order)"
+                  <!-- Hide deliver button for stock orders (they are automatically saved when received) -->
+                  <button x-show="!order.is_stock_order"
+                          @click="openDeliverModal(order)"
                           :disabled="order.status !== 'ready' || order.paid < order.total - 0.001"
                           :class="(order.status === 'ready' && order.paid >= order.total - 0.001)
                                   ? 'text-amber-600 hover:text-amber-800'
@@ -587,7 +664,7 @@
             <div class="flex justify-between items-center mb-2">
               <div class="flex items-center gap-2">
                 <input type="checkbox"
-                       :disabled="order.status !== 'ready'"
+                       :disabled="order.status !== 'ready' || order.is_stock_order"
                        :checked="isReadySelected(order.id)"
                        @change="toggleReadySelection(order)"
                        class="w-4 h-4 text-indigo-600">
@@ -641,11 +718,14 @@
                       title="{{ trans('messages.print_bill', [], session('locale')) ?: 'Print Bill' }}">
                 <span class="material-symbols-outlined text-base">print</span>
               </button>
-              <button @click="openPaymentModal(order)"
+              <button x-show="!order.is_stock_order"
+                      @click="openPaymentModal(order)"
                       class="text-emerald-600 hover:text-emerald-800 text-xs">
                 <span class="material-symbols-outlined text-base">payments</span>
               </button>
-              <button @click="openDeliverModal(order)"
+              <!-- Hide deliver button for stock orders (they are automatically saved when received) -->
+              <button x-show="!order.is_stock_order"
+                      @click="openDeliverModal(order)"
                       :disabled="order.status !== 'ready' || order.paid < order.total - 0.001"
                       :class="(order.status === 'ready' && order.paid >= order.total - 0.001)
                               ? 'text-amber-600 hover:text-amber-800 text-xs'

@@ -10,7 +10,7 @@
       @close-modal.window="open = false"
       @open-modal.window="open = true">
 
-    <div class="max-w-4xl mx-auto">
+    <div class="max-w-[95%] mx-auto">
         <!-- Page title and Add button -->
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-10">
             <h2 class="text-2xl sm:text-4xl font-bold text-[var(--text-primary)]">
@@ -44,19 +44,19 @@
             <table class="w-full text-sm text-right">
                 <thead class="bg-gray-50 border-b border-[var(--border-color)]">
                     <tr>
-                        <th class="px-4 sm:px-6 py-4 font-semibold text-[var(--text-secondary)]">
+                        <th class="px-4 sm:px-6 py-2 font-semibold text-[var(--text-secondary)]">
                             {{ trans('messages.customer_name', [], session('locale')) }}
                         </th>
-                        <th class="px-4 sm:px-6 py-4 font-semibold text-[var(--text-secondary)]">
+                        <th class="px-4 sm:px-6 py-2 font-semibold text-[var(--text-secondary)]">
                             {{ trans('messages.phone_number', [], session('locale')) }}
                         </th>
-                        <th class="px-4 sm:px-6 py-4 font-semibold text-[var(--text-secondary)]">
+                        <th class="px-4 sm:px-6 py-2 font-semibold text-[var(--text-secondary)]">
                             {{ trans('messages.city', [], session('locale')) }}
                         </th>
-                        <th class="px-4 sm:px-6 py-4 font-semibold text-[var(--text-secondary)]">
+                        <th class="px-4 sm:px-6 py-2 font-semibold text-[var(--text-secondary)]">
                             {{ trans('messages.area', [], session('locale')) }}
                         </th>
-                        <th class="px-4 sm:px-6 py-4 font-semibold text-[var(--text-secondary)] text-center">
+                        <th class="px-4 sm:px-6 py-2 font-semibold text-[var(--text-secondary)] text-center">
                             {{ trans('messages.actions', [], session('locale')) }}
                         </th>
                     </tr>
@@ -67,8 +67,9 @@
             </table>
         </div>
     </div>
-    <div class="flex justify-center mt-6">
-        <ul id="pagination" class="dress_pagination flex gap-2"></ul>
+    <div class="flex flex-col items-center gap-4 mt-6">
+        <ul id="pagination" class="flex flex-wrap items-center justify-center gap-2 list-none"></ul>
+        <p class="text-sm text-gray-600" id="pagination-info"></p>
     </div>
 
     <!-- Add Customer Modal -->

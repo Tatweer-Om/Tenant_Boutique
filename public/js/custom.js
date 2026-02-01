@@ -1,26 +1,73 @@
     /* ---------- Collapsible submenus ---------- */
+    // List of all submenu IDs
+    const allSubmenuIds = [
+      "posMenu",
+      "specialordersMenu",
+      "tailorMenu",
+      "inventoryMenu",
+      "boutiquesMenu",
+      "customersMenu",
+      "expensesMenu",
+      "settingsMenu",
+      "reportsMenu"
+    ];
+
     function toggleSubmenu(id) {
       const submenu = document.getElementById(id);
       const arrow = document.getElementById(`arrow-${id}`);
-      submenu.classList.toggle("active");
-      arrow.classList.toggle("rotate-180");
-      // Optional: remember state
-      const isOpen = submenu.classList.contains("active");
-      localStorage.setItem(`submenu:${id}`, isOpen ? "1" : "0");
+      
+      if (!submenu || !arrow) return;
+      
+      const isCurrentlyOpen = submenu.classList.contains("active");
+      
+      // Close all other submenus
+      allSubmenuIds.forEach(menuId => {
+        if (menuId !== id) {
+          const otherSubmenu = document.getElementById(menuId);
+          const otherArrow = document.getElementById(`arrow-${menuId}`);
+          if (otherSubmenu) {
+            otherSubmenu.classList.remove("active");
+          }
+          if (otherArrow) {
+            otherArrow.classList.remove("rotate-180");
+          }
+        }
+      });
+      
+      // Toggle current submenu
+      if (isCurrentlyOpen) {
+        // If it's open, close it
+        submenu.classList.remove("active");
+        arrow.classList.remove("rotate-180");
+      } else {
+        // If it's closed, open it
+        submenu.classList.add("active");
+        arrow.classList.add("rotate-180");
+      }
     }
 
-    // Restore submenu states on load - also check if menu has active class
-    ["inventoryMenu","stock_menue","customersMenu","boutiquesMenu","tailorMenu","specialordersMenu","posMenu"].forEach(id => {
-      const menu = document.getElementById(id);
-      const saved = localStorage.getItem(`submenu:${id}`);
-      // If menu has active class (from PHP), show it
-      if (menu && menu.classList.contains("active")) {
-        menu.classList.add("active");
-        document.getElementById(`arrow-${id}`)?.classList.add("rotate-180");
-      } else if (saved === "1") {
-        menu?.classList.add("active");
-        document.getElementById(`arrow-${id}`)?.classList.add("rotate-180");
-      }
+    // Restore submenu states on load - only keep the one with active class (from PHP)
+    document.addEventListener("DOMContentLoaded", () => {
+      allSubmenuIds.forEach(id => {
+        const menu = document.getElementById(id);
+        const arrow = document.getElementById(`arrow-${id}`);
+        
+        if (menu && menu.classList.contains("active")) {
+          // This menu should be open (contains active page)
+          menu.classList.add("active");
+          if (arrow) {
+            arrow.classList.add("rotate-180");
+          }
+        } else {
+          // Close all other menus
+          if (menu) {
+            menu.classList.remove("active");
+          }
+          if (arrow) {
+            arrow.classList.remove("rotate-180");
+          }
+        }
+      });
     });
 
     /* ---------- Dropdown helpers (click-to-toggle + click-outside) ---------- */
@@ -127,9 +174,9 @@
       }
     }
 
-    // Get initial locale from HTML attribute (from session) or default to 'ar'
-    const sessionLocale = htmlEl.getAttribute("lang") || "ar";
-    const initialDir = htmlEl.getAttribute("dir") || "rtl";
+    // Get initial locale from HTML attribute (from session) or default to 'en'
+    const sessionLocale = htmlEl.getAttribute("lang") || "en";
+    const initialDir = htmlEl.getAttribute("dir") || "ltr";
     
     // Ensure HTML dir attribute matches session locale (fix RTL issue after login)
     if (sessionLocale === "en") {

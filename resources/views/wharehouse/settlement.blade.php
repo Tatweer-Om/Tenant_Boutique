@@ -186,8 +186,12 @@
             {{ trans('messages.settlement_actions_note', [], session('locale')) }}
           </div>
           <div class="grid grid-cols-2 sm:flex sm:flex-row gap-2 w-full sm:w-auto">
-            <button @click="saveSettlement()" class="px-6 py-3 rounded-lg bg-[var(--primary-color)] text-white font-bold hover:opacity-90 w-full sm:w-auto">
-              {{ trans('messages.save_settlement', [], session('locale')) }}
+            <button
+              @click="saveSettlement()"
+              :disabled="savingSettlement"
+              class="px-6 py-3 rounded-lg bg-[var(--primary-color)] text-white font-bold hover:opacity-90 w-full sm:w-auto disabled:opacity-60 disabled:cursor-not-allowed disabled:pointer-events-none">
+              <span x-show="!savingSettlement">{{ trans('messages.save_settlement', [], session('locale')) }}</span>
+              <span x-show="savingSettlement">{{ trans('messages.loading', [], session('locale')) }}...</span>
             </button>
           </div>
         </div>
@@ -198,9 +202,9 @@
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <input type="search" class="h-12 px-3 border border-pink-200 rounded-lg w-full"
                  placeholder="{{ trans('messages.search_by_month_boutique', [], session('locale')) }}" 
-                 x-model="histSearch" @input="loadHistory()">
+                 x-model="histSearch" @input="loadHistory(1)">
           <input type="month" class="h-12 px-2 border border-pink-200 rounded-lg w-full" 
-                 x-model="histMonth" @change="loadHistory()">
+                 x-model="histMonth" @change="loadHistory(1)">
           <div class="flex items-center justify-end">
             <button @click="exportHistoryCSV()"
                     class="px-3 py-2 rounded-lg bg-white border hover:bg-gray-50 text-sm flex items-center gap-1 w-full sm:w-auto justify-center">
@@ -224,10 +228,20 @@
               </tr>
             </thead>
             <tbody>
-              <template x-if="history.length===0">
+              <template x-if="histLoading">
+                <tr>
+                  <td colspan="8" class="text-center text-gray-400 py-10">
+                    <div class="flex items-center justify-center gap-2">
+                      <span class="material-symbols-outlined animate-spin">refresh</span>
+                      {{ trans('messages.loading', [], session('locale')) }}...
+                    </div>
+                  </td>
+                </tr>
+              </template>
+              <template x-if="!histLoading && history.length===0">
                 <tr><td colspan="8" class="text-center text-gray-400 py-10">{{ trans('messages.no_record_yet', [], session('locale')) }}</td></tr>
               </template>
-              <template x-for="h in historyFiltered" :key="h.no">
+              <template x-if="!histLoading" x-for="h in historyFiltered" :key="h.no">
                 <tr class="border-t hover:bg-pink-50/60">
                   <td class="px-3 py-2 text-center font-semibold text-[var(--primary-color)]" x-text="h.no"></td>
                   <td class="px-3 py-2 text-center" x-text="h.month"></td>
@@ -254,6 +268,64 @@
               </template>
             </tbody>
           </table>
+        </div>
+
+        <!-- Pagination Controls -->
+        <ul class="flex justify-center gap-2 mt-4" x-show="histLastPage > 1 && !histLoading">
+          <!-- Previous Button -->
+          <li class="flex">
+            <button @click="loadHistory(histCurrentPage - 1)" 
+                    :disabled="histCurrentPage === 1"
+                    :class="histCurrentPage === 1 ? 'opacity-40 cursor-not-allowed bg-gray-200 pointer-events-none' : 'bg-white hover:bg-gray-100 cursor-pointer'"
+                    class="px-3 py-1 border rounded-lg mx-1 text-sm transition">
+              &laquo;
+            </button>
+          </li>
+
+          <!-- Page Numbers - Show all pages if 10 or less, otherwise smart pagination -->
+          <template x-if="histLastPage <= 10">
+            <template x-for="page in Array.from({length: histLastPage}, (_, i) => i + 1)" :key="page">
+              <li>
+                <button @click="loadHistory(page)"
+                        :class="histCurrentPage === page ? 'bg-[var(--primary-color)] text-white border-[var(--primary-color)] shadow-md' : 'bg-white hover:bg-gray-100'"
+                        class="px-4 py-1 mx-1 text-sm font-medium border rounded-lg transition cursor-pointer"
+                        x-text="page">
+                </button>
+              </li>
+            </template>
+          </template>
+
+          <template x-if="histLastPage > 10">
+            <template x-for="page in paginationPages" :key="page">
+              <template x-if="page === '...'">
+                <li class="px-2 text-gray-500 flex items-center">...</li>
+              </template>
+              <template x-if="page !== '...'">
+                <li>
+                  <button @click="loadHistory(page)"
+                          :class="histCurrentPage === page ? 'bg-[var(--primary-color)] text-white border-[var(--primary-color)] shadow-md' : 'bg-white hover:bg-gray-100'"
+                          class="px-4 py-1 mx-1 text-sm font-medium border rounded-lg transition cursor-pointer"
+                          x-text="page">
+                  </button>
+                </li>
+              </template>
+            </template>
+          </template>
+
+          <!-- Next Button -->
+          <li class="flex">
+            <button @click="loadHistory(histCurrentPage + 1)" 
+                    :disabled="histCurrentPage === histLastPage"
+                    :class="histCurrentPage === histLastPage ? 'opacity-40 cursor-not-allowed bg-gray-200 pointer-events-none' : 'bg-white hover:bg-gray-100 cursor-pointer'"
+                    class="px-3 py-1 border rounded-lg mx-1 text-sm transition">
+              &raquo;
+            </button>
+          </li>
+        </ul>
+
+        <!-- Pagination Info -->
+        <div class="text-center mt-2 text-sm text-gray-600" x-show="histTotal > 0 && !histLoading">
+          <span x-text="getPaginationInfo()"></span>
         </div>
       </section>
     </div>
@@ -379,16 +451,16 @@
               <table class="w-full text-sm min-w-[1100px]">
                 <thead class="bg-gradient-to-l from-pink-50 to-purple-50 text-gray-800">
                   <tr>
-                    <th class="px-3 py-2 text-right font-bold">{{ trans('messages.code', [], session('locale')) }}</th>
-                    <th class="px-3 py-2 text-right font-bold">{{ trans('messages.color', [], session('locale')) }}</th>
-                    <th class="px-3 py-2 text-right font-bold">{{ trans('messages.size', [], session('locale')) }}</th>
-                    <th class="px-3 py-2 text-right font-bold">{{ trans('messages.sent', [], session('locale')) }}</th>
-                    <th class="px-3 py-2 text-right font-bold">{{ trans('messages.pulled', [], session('locale')) }}</th>
-                    <th class="px-3 py-2 text-right font-bold">{{ trans('messages.sellable', [], session('locale')) }}</th>
-                    <th class="px-3 py-2 text-right font-bold">{{ trans('messages.sold_report', [], session('locale')) }}</th>
-                    <th class="px-3 py-2 text-right font-bold">{{ trans('messages.difference', [], session('locale')) }}</th>
-                    <th class="px-3 py-2 text-right font-bold">{{ trans('messages.price', [], session('locale')) }}</th>
-                    <th class="px-3 py-2 text-right font-bold">{{ trans('messages.total', [], session('locale')) }}</th>
+                    <th class="px-3 py-2 text-center font-bold">{{ trans('messages.code', [], session('locale')) }}</th>
+                    <th class="px-3 py-2 text-center font-bold">{{ trans('messages.color', [], session('locale')) }}</th>
+                    <th class="px-3 py-2 text-center font-bold">{{ trans('messages.size', [], session('locale')) }}</th>
+                    <th class="px-3 py-2 text-center font-bold">{{ trans('messages.sent', [], session('locale')) }}</th>
+                    <th class="px-3 py-2 text-center font-bold">{{ trans('messages.pulled', [], session('locale')) }}</th>
+                    <th class="px-3 py-2 text-center font-bold">{{ trans('messages.sellable', [], session('locale')) }}</th>
+                    <th class="px-3 py-2 text-center font-bold">{{ trans('messages.sold_report', [], session('locale')) }}</th>
+                    <th class="px-3 py-2 text-center font-bold">{{ trans('messages.difference', [], session('locale')) }}</th>
+                    <th class="px-3 py-2 text-center font-bold">{{ trans('messages.price', [], session('locale')) }}</th>
+                    <th class="px-3 py-2 text-center font-bold">{{ trans('messages.total', [], session('locale')) }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -402,8 +474,8 @@
                   <template x-for="item in (settlementDetails.items_data || [])" :key="item.uid || (item.code + '-' + item.size + '-' + item.color)">
                     <tr class="border-t"
                         :class="(item.diff || 0) == 0 ? 'bg-green-50' : (Number(item.sold||0) > Number(item.sellable||0) ? 'bg-red-50' : 'bg-pink-50')">
-                      <td class="px-3 py-2 font-semibold" x-text="item.code || '-'"></td>
-                      <td class="px-3 py-2">
+                      <td class="px-3 py-2 text-center font-semibold" x-text="item.code || '-'"></td>
+                      <td class="px-3 py-2 text-center">
                         <template x-if="item.color">
                           <span class="inline-flex items-center gap-2">
                             <template x-if="item.color_code">
@@ -414,16 +486,16 @@
                         </template>
                         <template x-if="!item.color">—</template>
                       </td>
-                      <td class="px-3 py-2" x-text="item.size || '—'"></td>
-                      <td class="px-3 py-2" x-text="item.sent || 0"></td>
-                      <td class="px-3 py-2" x-text="item.pulled || 0"></td>
-                      <td class="px-3 py-2" x-text="item.sellable || 0"></td>
-                      <td class="px-3 py-2" x-text="item.sold || 0"></td>
-                      <td class="px-3 py-2 font-semibold"
+                      <td class="px-3 py-2 text-center" x-text="item.size || '—'"></td>
+                      <td class="px-3 py-2 text-center" x-text="item.sent || 0"></td>
+                      <td class="px-3 py-2 text-center" x-text="item.pulled || 0"></td>
+                      <td class="px-3 py-2 text-center" x-text="item.sellable || 0"></td>
+                      <td class="px-3 py-2 text-center" x-text="item.sold || 0"></td>
+                      <td class="px-3 py-2 text-center font-semibold"
                           :class="(item.diff || 0) != 0 ? 'text-[var(--primary-color)]' : 'text-gray-700'"
                           x-text="item.diff || 0"></td>
-                      <td class="px-3 py-2" x-text="item.price || 0"></td>
-                      <td class="px-3 py-2 font-bold text-gray-900" x-text="formatCurrency(item.total || 0)"></td>
+                      <td class="px-3 py-2 text-center" x-text="item.price || 0"></td>
+                      <td class="px-3 py-2 text-center font-bold text-gray-900" x-text="formatCurrency(item.total || 0)"></td>
                     </tr>
                   </template>
                 </tbody>
@@ -481,12 +553,20 @@ function settlementPage(){
     movements: [],
     history: [],
     histSearch: '', histMonth: '',
+    histCurrentPage: 1,
+    histLastPage: 1,
+    histTotal: 0,
+    histPerPage: 10,
+    histFrom: 0,
+    histTo: 0,
+    histLoading: false,
 
     showMov:false, movRow:{}, movDetails:[],
     showSettlementDetails: false,
     settlementDetails: {},
     settlementDetailsLoading: false,
     loading: false,
+    savingSettlement: false,
 
     // Helpers
     formatCurrency(n){ const v=Number(n||0); return v.toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2}) + ' ر.ع'; },
@@ -494,6 +574,13 @@ function settlementPage(){
       if (!id) return '';
       const b = this.boutiques.find(x => x.id == id || 'boutique-' + x.id == id);
       return b ? b.name : id; 
+    },
+    getPaginationInfo(){
+      const showing = '{{ trans("messages.showing", [], session("locale")) ?: "Showing" }}';
+      const to = '{{ trans("messages.to", [], session("locale")) ?: "to" }}';
+      const of = '{{ trans("messages.of", [], session("locale")) ?: "of" }}';
+      const entries = '{{ trans("messages.entries", [], session("locale")) ?: "entries" }}';
+      return `${showing} ${this.histFrom || 0} ${to} ${this.histTo || 0} ${of} ${this.histTotal} ${entries}`;
     },
 
     // Load boutiques from backend
@@ -647,10 +734,15 @@ function settlementPage(){
     removeAttachment(){ this.attachment = {name:'', sizeLabel:'', file: null}; },
 
     async saveSettlement(){
+      if (this.savingSettlement) return;
+
       if(this.rows.length===0){ 
         alert('{{ trans('messages.no_data_to_save', [], session('locale')) }}'); 
         return; 
       }
+
+      this.savingSettlement = true;
+      let savedOk = false;
 
       const month = (this.filters.from||'').slice(0,7) || new Date().toISOString().slice(0,7);
       const amount = this.sum('total');
@@ -692,6 +784,7 @@ function settlementPage(){
         const result = await response.json();
 
         if (result.success) {
+          savedOk = true;
           this.toast('{{ trans('messages.settlement_saved_successfully', [], session('locale')) }}');
           // Reload the page after a short delay to show the toast message
           setTimeout(() => {
@@ -703,33 +796,89 @@ function settlementPage(){
       } catch (error) {
         console.error('Error saving settlement:', error);
         alert('{{ trans('messages.error_saving_settlement', [], session('locale')) }}');
+      } finally {
+        // Keep disabled on success (page will reload). Re-enable only if save failed.
+        if (!savedOk) this.savingSettlement = false;
       }
     },
 
-    // Load settlement history from backend
-    async loadHistory(){
+    // Load settlement history from backend with pagination
+    async loadHistory(page = 1){
+      this.histLoading = true;
+      this.histCurrentPage = page;
+      
       try {
         const params = new URLSearchParams();
         if (this.histSearch) params.append('search', this.histSearch);
         if (this.histMonth) params.append('month', this.histMonth);
+        params.append('page', page);
 
         const response = await fetch('/get_settlement_history?' + params.toString());
-        const data = await response.json();
+        const result = await response.json();
 
-        if (response.ok && Array.isArray(data)) {
-          this.history = data;
+        if (response.ok && result.data && Array.isArray(result.data)) {
+          this.history = result.data;
+          this.histCurrentPage = result.current_page || 1;
+          this.histLastPage = result.last_page || 1;
+          this.histTotal = result.total || 0;
+          this.histPerPage = result.per_page || 10;
+          this.histFrom = result.from || 0;
+          this.histTo = result.to || 0;
         } else {
           this.history = [];
+          this.histCurrentPage = 1;
+          this.histLastPage = 1;
+          this.histTotal = 0;
+          this.histFrom = 0;
+          this.histTo = 0;
         }
       } catch (error) {
         console.error('Error loading settlement history:', error);
         this.history = [];
+        this.histCurrentPage = 1;
+        this.histLastPage = 1;
+        this.histTotal = 0;
+        this.histFrom = 0;
+        this.histTo = 0;
+      } finally {
+        this.histLoading = false;
       }
     },
 
     // History filter (now just returns history since filtering is done on backend)
     get historyFiltered(){
       return this.history;
+    },
+
+    // Get pagination pages array for smart pagination
+    get paginationPages(){
+      if (this.histLastPage <= 1) return [];
+      if (this.histLastPage <= 10) {
+        return Array.from({length: this.histLastPage}, (_, i) => i + 1);
+      }
+      
+      let pages = [];
+      let startPage = Math.max(1, this.histCurrentPage - 2);
+      let endPage = Math.min(this.histLastPage, this.histCurrentPage + 2);
+      
+      // Always show first page
+      if (startPage > 1) {
+        pages.push(1);
+        if (startPage > 2) pages.push('...');
+      }
+      
+      // Show pages around current
+      for (let i = startPage; i <= endPage; i++) {
+        pages.push(i);
+      }
+      
+      // Always show last page
+      if (endPage < this.histLastPage) {
+        if (endPage < this.histLastPage - 1) pages.push('...');
+        pages.push(this.histLastPage);
+      }
+      
+      return pages;
     },
 
     // Open history details modal
@@ -821,8 +970,8 @@ function settlementPage(){
       // Load boutiques from backend
       await this.loadBoutiques();
       
-      // Load settlement history
-      await this.loadHistory();
+      // Load settlement history (page 1)
+      await this.loadHistory(1);
       
       // Prefill month range
       const now = new Date();

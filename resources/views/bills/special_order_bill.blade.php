@@ -209,19 +209,35 @@ td img{
 
   <!-- Customer -->
   <div class="customer">
-    <div><strong>{{ trans('messages.customer_name', [], session('locale')) }}:</strong> {{ $specialOrder->customer->name ?? 'N/A' }}</div>
-    <div><strong>{{ trans('messages.phone_number', [], session('locale')) ?? 'الهاتف' }}:</strong> {{ $specialOrder->customer->phone ?? '—' }}</div>
+    @php
+      $isStockOrder = $specialOrder->customer_id === null || $specialOrder->source === 'stock';
+    @endphp
+    <div><strong>{{ trans('messages.customer_name', [], session('locale')) }}:</strong> 
+      @if($isStockOrder)
+        {{ trans('messages.stock_special_order', [], session('locale')) ?? 'Stock Special Order' }}
+      @else
+        {{ $specialOrder->customer->name ?? 'N/A' }}
+      @endif
+    </div>
+    <div><strong>{{ trans('messages.phone_number', [], session('locale')) ?? 'الهاتف' }}:</strong> 
+      @if($isStockOrder)
+        —
+      @else
+        {{ $specialOrder->customer->phone ?? '—' }}
+      @endif
+    </div>
+    @if(!$isStockOrder)
     <div class="full">
       <strong>{{ trans('messages.address', [], session('locale')) }}:</strong> 
       @php
         $addressParts = [];
-        if ($specialOrder->customer->area) {
+        if ($specialOrder->customer && $specialOrder->customer->area) {
           $locale = session('locale', 'en');
           $addressParts[] = $locale === 'ar' 
             ? ($specialOrder->customer->area->area_name_ar ?? $specialOrder->customer->area->area_name_en ?? '')
             : ($specialOrder->customer->area->area_name_en ?? $specialOrder->customer->area->area_name_ar ?? '');
         }
-        if ($specialOrder->customer->city) {
+        if ($specialOrder->customer && $specialOrder->customer->city) {
           $locale = session('locale', 'en');
           $addressParts[] = $locale === 'ar'
             ? ($specialOrder->customer->city->city_name_ar ?? $specialOrder->customer->city->city_name_en ?? '')
@@ -232,6 +248,7 @@ td img{
       @endphp
       {{ $fullAddress ?: '—' }}
     </div>
+    @endif
     <div><strong>{{ trans('messages.shipping', [], session('locale')) }}:</strong> {{ trans('messages.paid_to_delivery_agent', [], session('locale')) }}</div>
     <div><strong>{{ trans('messages.delivery_fee', [], session('locale')) }}:</strong> {{ number_format($specialOrder->shipping_fee, 3) }} {{ trans('messages.currency', [], session('locale')) }}</div>
     @if($specialOrder->send_as_gift && $specialOrder->gift_text)

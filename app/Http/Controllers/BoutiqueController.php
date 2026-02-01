@@ -4,11 +4,49 @@ namespace App\Http\Controllers;
 
 use App\Models\Boutique;
 use App\Models\BoutiqueInvo;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class BoutiqueController extends Controller
 {
+    /**
+     * Normalize invoice month to canonical "Y-m".
+     * Supports stored formats: "m-Y" and "Y-m".
+     */
+    private function normalizeInvoiceMonthToYm(?string $month): ?string
+    {
+        $month = trim((string)$month);
+        if ($month === '') return null;
+
+        // "Y-m" (e.g. 2026-01)
+        if (preg_match('/^\d{4}-\d{2}$/', $month)) {
+            return $month;
+        }
+
+        // "m-Y" (e.g. 01-2026)
+        if (preg_match('/^\d{2}-\d{4}$/', $month)) {
+            [$m, $y] = explode('-', $month);
+            return $y . '-' . $m;
+        }
+
+        // Last resort: try parsing
+        try {
+            return Carbon::parse($month)->format('Y-m');
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    private function formatYmToMY(string $ym): string
+    {
+        try {
+            return Carbon::createFromFormat('Y-m', $ym)->format('m-Y');
+        } catch (\Throwable $e) {
+            return $ym;
+        }
+    }
+
  public function index() {
         if (!Auth::check()) {
             return redirect()->route('login_page')->with('error', 'Please login first');
@@ -142,18 +180,84 @@ class BoutiqueController extends Controller
         
         $monthlyProfit = 0;
         
-        // Get all invoices from boutique_invos table (paid and unpaid)
-        $allInvoices = BoutiqueInvo::where('boutique_id', (string)$id)
-            ->orderBy('month', 'asc')
-            ->get();
-        
-        // Get unpaid invoices separately for count
-        $unpaidInvoices = BoutiqueInvo::where('boutique_id', (string)$id)
-            ->where('status', '5') // Status 5 = Unpaid
-            ->orderBy('month', 'asc')
-            ->get();
-        
-        // Count unpaid invoices
+        // Invoices: show months up to current month, and show next month only within 10 days before due date.
+        // Also ignore any invoices before rent start month.
+        $today = \Carbon\Carbon::now()->startOfDay();
+        $rentStartDate = $boutique->rent_date ? \Carbon\Carbon::parse($boutique->rent_date)->startOfDay() : null;
+        $rentStartMonthYm = $rentStartDate ? $rentStartDate->copy()->startOfMonth()->format('Y-m') : null;
+        $dueDay = $rentStartDate ? (int)$rentStartDate->day : 1;
+
+        $nowMonth = \Carbon\Carbon::now()->startOfMonth();
+        if ($rentStartDate && $nowMonth->lt($rentStartDate->copy()->startOfMonth())) {
+            $nowMonth = $rentStartDate->copy()->startOfMonth();
+        }
+        $currentYm = $nowMonth->format('Y-m');
+        $nextMonth = $nowMonth->copy()->addMonthNoOverflow();
+        $nextYm = $nextMonth->format('Y-m');
+
+        // Next month's due date (overflow-safe)
+        $nextDueDate = \Carbon\Carbon::create($nextMonth->year, $nextMonth->month, $dueDay);
+        if ((int)$nextDueDate->month !== (int)$nextMonth->month) {
+            $nextDueDate = $nextMonth->copy()->endOfMonth();
+        }
+        $daysUntilNextDue = $today->diffInDays($nextDueDate->copy()->startOfDay(), false);
+        $showNextMonth = ($daysUntilNextDue >= 0 && $daysUntilNextDue <= 10);
+
+        // Load all invoice records and consolidate by month (support mixed formats).
+        $rawInvoices = BoutiqueInvo::where('boutique_id', (string)$id)->get();
+        $groups = []; // ym => Collection<Model>
+        foreach ($rawInvoices as $inv) {
+            $ym = $this->normalizeInvoiceMonthToYm($inv->month);
+            if (!$ym) continue;
+            if ($rentStartMonthYm && $ym < $rentStartMonthYm) continue;
+            if (!isset($groups[$ym])) $groups[$ym] = collect();
+            $groups[$ym]->push($inv);
+        }
+
+        $chosenByMonth = collect();
+        foreach ($groups as $ym => $list) {
+            $chosen = $list->first(function ($x) {
+                return (string)($x->status ?? '') === '4' || (int)($x->status ?? 0) === 4;
+            }) ?? $list->first(function ($x) {
+                return (string)($x->status ?? '') === '5' || (int)($x->status ?? 0) === 5;
+            }) ?? $list->sortByDesc('id')->first();
+
+            if ($chosen) {
+                $chosenByMonth->put($ym, $chosen);
+            }
+        }
+
+        // Filter months shown in profile invoices table
+        $allInvoices = $chosenByMonth
+            ->filter(function ($inv, $ym) use ($currentYm, $nextYm, $showNextMonth) {
+                if ($ym <= $currentYm) return true;
+                if ($showNextMonth && $ym === $nextYm) return true;
+                return false;
+            })
+            ->sortKeys()
+            ->values();
+
+        // Unpaid invoices count: only count invoices that are due (due date today or passed) and not paid.
+        $unpaidInvoices = $chosenByMonth
+            ->filter(function ($inv, $ym) use ($rentStartMonthYm, $currentYm, $dueDay, $today) {
+                if ($rentStartMonthYm && $ym < $rentStartMonthYm) return false;
+                if ($ym > $currentYm) return false; // don't count future months as unpaid
+                if ((string)($inv->status ?? '') === '4' || (int)($inv->status ?? 0) === 4) return false;
+
+                try {
+                    $monthStart = \Carbon\Carbon::createFromFormat('Y-m', $ym)->startOfMonth();
+                } catch (\Throwable $e) {
+                    return false;
+                }
+                $dueDate = \Carbon\Carbon::create($monthStart->year, $monthStart->month, $dueDay);
+                if ((int)$dueDate->month !== (int)$monthStart->month) {
+                    $dueDate = $monthStart->copy()->endOfMonth();
+                }
+                return $dueDate->startOfDay()->lte($today);
+            })
+            ->sortKeys()
+            ->values();
+
         $unpaidInvoicesCount = $unpaidInvoices->count();
         
         // Calculate income report metrics
@@ -360,16 +464,67 @@ public function getboutiques() {
     
     // Add unpaid months info to each boutique
     foreach ($boutiques->items() as $boutique) {
-        $unpaidInvoices = BoutiqueInvo::where('boutique_id', (string)$boutique->id)
-            ->where('status', '5') // Unpaid
-            ->orderBy('month', 'asc')
-            ->get();
-        
-        $unpaidMonths = [];
-        foreach ($unpaidInvoices as $invoice) {
-            $unpaidMonths[] = $invoice->month;
+        $today = Carbon::now()->startOfDay();
+        $rentStartDate = $boutique->rent_date ? Carbon::parse($boutique->rent_date)->startOfDay() : null;
+        $rentStartMonthYm = $rentStartDate ? $rentStartDate->copy()->startOfMonth()->format('Y-m') : null;
+        $dueDay = $rentStartDate ? (int)$rentStartDate->day : 1;
+
+        // Some records were stored as "m-Y" and others as "Y-m".
+        // Treat a month as PAID if any invoice for that month has status 4.
+        $allInvoices = BoutiqueInvo::where('boutique_id', (string)$boutique->id)
+            ->get(['month', 'status']);
+
+        $months = []; // ym => ['paid' => bool]
+        foreach ($allInvoices as $inv) {
+            $ym = $this->normalizeInvoiceMonthToYm($inv->month);
+            if (!$ym) continue;
+
+            // Never consider months before rent start month
+            if ($rentStartMonthYm && $ym < $rentStartMonthYm) {
+                continue;
+            }
+
+            if (!isset($months[$ym])) {
+                $months[$ym] = ['paid' => false];
+            }
+            if ((string)$inv->status === '4' || (int)$inv->status === 4) {
+                $months[$ym]['paid'] = true;
+            }
         }
-        
+
+        // Only mark as "unpaid" if the invoice is DUE (due date is today or passed).
+        // Future months (e.g., next month) should not make the list show unpaid early.
+        $unpaidMonths = [];
+        foreach ($months as $ym => $info) {
+            if ($info['paid']) {
+                continue;
+            }
+
+            try {
+                $monthStart = Carbon::createFromFormat('Y-m', $ym)->startOfMonth();
+            } catch (\Throwable $e) {
+                continue;
+            }
+
+            // Due date = same day-of-month as boutique rent start (overflow safe)
+            $dueDate = Carbon::create($monthStart->year, $monthStart->month, $dueDay);
+            if ((int)$dueDate->month !== (int)$monthStart->month) {
+                $dueDate = $monthStart->copy()->endOfMonth();
+            }
+            $dueDate = $dueDate->startOfDay();
+
+            if ($dueDate->lte($today)) {
+                $unpaidMonths[] = $this->formatYmToMY($ym);
+            }
+        }
+
+        // Sort by date
+        usort($unpaidMonths, function ($a, $b) {
+            $pa = $this->normalizeInvoiceMonthToYm($a) ?? $a;
+            $pb = $this->normalizeInvoiceMonthToYm($b) ?? $b;
+            return strcmp($pa, $pb);
+        });
+
         $boutique->unpaid_months = $unpaidMonths;
         $boutique->unpaid_count = count($unpaidMonths);
     }
@@ -584,11 +739,162 @@ public function get_boutique_invoices(Request $request)
             'message' => __('messages.not_found')
         ], 404);
     }
-    
-    // Get all invoices for this boutique, ordered by month
-    $invoices = BoutiqueInvo::where('boutique_id', (string)$boutique_id)
-        ->orderBy('month', 'asc')
+
+    // Popup requirement:
+    // - Always show CURRENT month invoice (paid or unpaid)
+    // - Show NEXT month invoice only within 10 days before its due date
+    // - Show ALL unpaid invoices (up to current month only; do not show future unpaid months)
+    // - Show only LAST 4 paid invoices
+    // - Never show months before rent start month
+
+    $today = Carbon::now()->startOfDay();
+    $rentStartDate = Carbon::parse($boutique->rent_date)->startOfDay();
+    $rentStartMonth = $rentStartDate->copy()->startOfMonth();
+    $dueDay = (int)$rentStartDate->day;
+
+    $currentMonth = Carbon::now()->startOfMonth();
+    if ($currentMonth->lt($rentStartMonth)) {
+        $currentMonth = $rentStartMonth->copy();
+    }
+    $currentYm = $currentMonth->format('Y-m');
+    $nextMonth = $currentMonth->copy()->addMonthNoOverflow();
+    $nextYm = $nextMonth->format('Y-m');
+
+    // Next due date for NEXT month (same day-of-month, overflow-safe)
+    $nextDueDate = Carbon::create($nextMonth->year, $nextMonth->month, $dueDay);
+    if ((int)$nextDueDate->month !== (int)$nextMonth->month) {
+        $nextDueDate = $nextMonth->copy()->endOfMonth();
+    }
+    $daysUntilNextDue = $today->diffInDays($nextDueDate->copy()->startOfDay(), false);
+    $showNextMonth = ($daysUntilNextDue >= 0 && $daysUntilNextDue <= 10);
+
+    // Load all invoices for boutique, group by normalized month
+    $rawInvoices = BoutiqueInvo::where('boutique_id', (string)$boutique_id)
+        ->orderBy('id', 'desc')
         ->get();
+
+    $groups = []; // ym => Collection
+    foreach ($rawInvoices as $inv) {
+        $ym = $this->normalizeInvoiceMonthToYm($inv->month);
+        if (!$ym) continue;
+        // Never show months before rent start month
+        if ($ym < $rentStartMonth->format('Y-m')) continue;
+        if (!isset($groups[$ym])) $groups[$ym] = collect();
+        $groups[$ym]->push($inv);
+    }
+
+    $pickBestInvoiceForMonth = function ($list) {
+        if (!$list || $list->count() === 0) return null;
+        return $list->first(function ($x) {
+            return (string)($x->status ?? '') === '4' || (int)($x->status ?? 0) === 4;
+        }) ?? $list->first(function ($x) {
+            return (string)($x->status ?? '') === '5' || (int)($x->status ?? 0) === 5;
+        }) ?? $list->first();
+    };
+
+    // Ensure current month invoice exists
+    if (!isset($groups[$currentYm]) || $groups[$currentYm]->count() === 0) {
+        $invoice = new BoutiqueInvo();
+        $invoice->boutique_id = (string)$boutique_id;
+        $invoice->boutique_name = $boutique->boutique_name;
+        $invoice->month = $this->formatYmToMY($currentYm);
+        $invoice->payment_date = null;
+        $invoice->status = '5';
+        $invoice->total_amount = $boutique->monthly_rent ?? 0;
+        $invoice->added_by = 'system';
+        $invoice->user_id = 1;
+        $invoice->save();
+        $groups[$currentYm] = collect([$invoice]);
+    }
+
+    // Ensure next month invoice exists only if it should be shown
+    if ($showNextMonth && (!isset($groups[$nextYm]) || $groups[$nextYm]->count() === 0)) {
+        $invoice = new BoutiqueInvo();
+        $invoice->boutique_id = (string)$boutique_id;
+        $invoice->boutique_name = $boutique->boutique_name;
+        $invoice->month = $this->formatYmToMY($nextYm);
+        $invoice->payment_date = null;
+        $invoice->status = '5';
+        $invoice->total_amount = $boutique->monthly_rent ?? 0;
+        $invoice->added_by = 'system';
+        $invoice->user_id = 1;
+        $invoice->save();
+        $groups[$nextYm] = collect([$invoice]);
+    }
+
+    // Unpaid invoices: show all unpaid months up to current month (do not show future unpaid)
+    $unpaidMonths = [];
+    foreach ($groups as $ym => $list) {
+        if ($ym > $currentYm) continue;
+        $hasPaid = $list->first(function ($x) {
+            return (string)($x->status ?? '') === '4' || (int)($x->status ?? 0) === 4;
+        }) ? true : false;
+        if ($hasPaid) continue;
+        $hasUnpaid = $list->first(function ($x) {
+            return (string)($x->status ?? '') === '5' || (int)($x->status ?? 0) === 5;
+        }) ? true : false;
+        if ($hasUnpaid) {
+            $unpaidMonths[] = $ym;
+        }
+    }
+    sort($unpaidMonths);
+
+    // Paid history: last 4 paid invoices for this boutique
+    $paidCandidates = collect();
+    foreach ($groups as $ym => $list) {
+        $paidList = $list->filter(function ($x) {
+            return (string)($x->status ?? '') === '4' || (int)($x->status ?? 0) === 4;
+        });
+        if ($paidList->count() === 0) continue;
+
+        $bestPaid = $paidList->sortByDesc(function ($x) {
+            return $x->payment_date ? strtotime($x->payment_date) : 0;
+        })->sortByDesc('id')->first();
+        if ($bestPaid) {
+            $paidCandidates->push([
+                'ym' => $ym,
+                'inv' => $bestPaid,
+                'paid_ts' => $bestPaid->payment_date ? strtotime($bestPaid->payment_date) : 0,
+            ]);
+        }
+    }
+    $paidHistoryMonths = $paidCandidates
+        ->sortByDesc('paid_ts')
+        ->take(4)
+        ->pluck('ym')
+        ->values()
+        ->all();
+
+    // Build final months list in required order:
+    // 1) all unpaid (<= current month)
+    // 2) current month (always)
+    // 3) next month (only in 10-day window)
+    // 4) last 4 paid
+    $finalMonths = [];
+    $addMonth = function ($ym) use (&$finalMonths) {
+        if (!in_array($ym, $finalMonths, true)) {
+            $finalMonths[] = $ym;
+        }
+    };
+    foreach ($unpaidMonths as $ym) $addMonth($ym);
+    $addMonth($currentYm);
+    if ($showNextMonth) $addMonth($nextYm);
+    foreach ($paidHistoryMonths as $ym) $addMonth($ym);
+
+    $invoices = collect();
+    foreach ($finalMonths as $ym) {
+        $list = $groups[$ym] ?? collect();
+        $chosen = $pickBestInvoiceForMonth($list);
+        if (!$chosen) continue;
+        $invoices->push([
+            'id' => $chosen->id,
+            'month' => $this->formatYmToMY($ym),
+            'month_ym' => $ym,
+            'payment_date' => $chosen->payment_date,
+            'status' => (string)($chosen->status ?? ''),
+            'total_amount' => $chosen->total_amount,
+        ]);
+    }
     
     return response()->json([
         'success' => true,

@@ -2,7 +2,7 @@
 
 @section('main')
 @push('title')
-<title>{{ trans('messages.edit_material', [], session('locale')) ?: 'Edit Material' }}</title>
+<title>{{ trans('messages.edit_material', [], session('locale')) }}</title>
 @endpush
 
 <style>
@@ -21,7 +21,7 @@
           <span class="material-symbols-outlined text-gray-600">arrow_back</span>
         </a>
         <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">
-          {{ trans('messages.edit_material', [], session('locale')) ?: 'Edit Material' }}
+          {{ trans('messages.edit_material', [], session('locale')) }}
         </h1>
       </div>
     </div>
@@ -132,12 +132,13 @@
             <h2 class="text-lg font-bold text-gray-800">{{ trans('messages.qty_price', [], session('locale')) }}</h2>
           </div>
           
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <!-- Buy Price -->
             <label class="flex flex-col">
               <span class="text-sm font-semibold text-gray-700 mb-1.5">{{ trans('messages.buy_price', [], session('locale')) }}</span>
               <input type="number" 
                      step="0.01"
+                     min="0"
                      placeholder="0.00"
                      value="{{ $material->buy_price ?? '' }}"
                      class="h-11 rounded-lg px-4 border border-gray-300 focus:ring-2 focus:ring-primary/50 focus:border-primary transition" 
@@ -145,26 +146,17 @@
                      id="purchase_price" />
             </label>
 
-            <!-- Rolls Count -->
+            <!-- Meters/Pieces -->
             <label class="flex flex-col">
-              <span class="text-sm font-semibold text-gray-700 mb-1.5">{{ trans('messages.rolls_count', [], session('locale')) }}</span>
+              <span class="text-sm font-semibold text-gray-700 mb-1.5">{{ trans('messages.total_meters_pieces', [], session('locale')) }}</span>
               <input type="number" 
+                     step="0.01"
                      placeholder="0"
-                     value="{{ $material->rolls_count ?? '' }}"
-                     class="h-11 rounded-lg px-4 border border-gray-300 focus:ring-2 focus:ring-primary/50 focus:border-primary transition" 
-                     name="roll_count" 
-                     id="roll_count" />
-            </label>
-
-            <!-- Meters Per Roll -->
-            <label class="flex flex-col">
-              <span class="text-sm font-semibold text-gray-700 mb-1.5">{{ trans('messages.meters_per_roll', [], session('locale')) }}</span>
-              <input type="number" 
-                     placeholder="0"
-                     value="{{ $material->meters_per_roll ?? '' }}"
-                     class="h-11 rounded-lg px-4 border border-gray-300 focus:ring-2 focus:ring-primary/50 focus:border-primary transition" 
-                     name="meter_per_roll" 
-                     id="meter_per_roll" />
+                     value="{{ ($material->rolls_count ?? 0) * ($material->meters_per_roll ?? 0) }}"
+                     readonly
+                     class="h-11 rounded-lg px-4 border border-gray-300 bg-gray-100 cursor-not-allowed transition" 
+                     name="meters_pieces" 
+                     id="meters_pieces" />
             </label>
           </div>
           

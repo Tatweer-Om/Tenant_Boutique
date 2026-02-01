@@ -12,6 +12,20 @@
             const statusText = isActive ? '<?= trans("messages.active_for_pos", [], session("locale")) ?>' : '<?= trans("messages.inactive_for_pos", [], session("locale")) ?>';
             const statusClass = isActive ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400 hover:bg-gray-500';
             const statusIcon = isActive ? 'check_circle' : 'cancel';
+            const isPrimaryChannel = channel.id == 1;
+            
+            // Do not show "Active for POS" button/label for primary channel (ID: 1)
+            let statusButtonHtml = '';
+            if (!isPrimaryChannel) {
+                statusButtonHtml = `
+                    <button class="status-toggle-btn px-4 py-2 rounded-full text-white text-sm font-medium transition-colors ${statusClass}" 
+                            data-status="${statusForPos}" 
+                            data-id="${channel.id}"
+                            title="${statusText}">
+                        <span class="material-symbols-outlined text-base align-middle mr-1">${statusIcon}</span>
+                        ${statusText}
+                    </button>`;
+            }
             
             rows += `
             <tr class="hover:bg-pink-50/50 transition-colors" data-id="${channel.id}">
@@ -26,13 +40,7 @@
                         <button class="edit-btn icon-btn">
                             <span class="material-symbols-outlined">edit</span>
                         </button>
-                        <button class="status-toggle-btn px-4 py-2 rounded-full text-white text-sm font-medium transition-colors ${statusClass}" 
-                                data-status="${statusForPos}" 
-                                data-id="${channel.id}"
-                                title="${statusText}">
-                            <span class="material-symbols-outlined text-base align-middle mr-1">${statusIcon}</span>
-                            ${statusText}
-                        </button>
+                        ${statusButtonHtml}
                     </div>
                 </td>
             </tr>
@@ -179,6 +187,17 @@ $(document).on('click', '#pagination a', function(e) {
         // Toggle channel status for POS
         $(document).on('click', '.status-toggle-btn', function() {
             let id = $(this).data('id');
+            
+            // Prevent status update for primary channel (ID: 1)
+            if (id == 1) {
+                Swal.fire(
+                    '<?= trans("messages.error_title", [], session("locale")) ?? "Error" ?>',
+                    '<?= trans("messages.cannot_update_primary_channel_status", [], session("locale")) ?? "Cannot update status for primary channel (ID: 1)" ?>',
+                    'error'
+                );
+                return;
+            }
+            
             let currentStatus = $(this).data('status');
             let newStatus = currentStatus == 1 ? 2 : 1;
             let statusText = newStatus == 1 ? '<?= trans("messages.active_for_pos", [], session("locale")) ?>' : '<?= trans("messages.inactive_for_pos", [], session("locale")) ?>';
@@ -213,9 +232,13 @@ $(document).on('click', '#pagination a', function(e) {
                             );
                         },
                         error: function(xhr) {
+                            let errorMessage = '<?= trans("messages.status_update_error_text", [], session("locale")) ?>';
+                            if (xhr.responseJSON && xhr.responseJSON.message) {
+                                errorMessage = xhr.responseJSON.message;
+                            }
                             Swal.fire(
                                 '<?= trans("messages.status_update_error", [], session("locale")) ?>',
-                                '<?= trans("messages.status_update_error_text", [], session("locale")) ?>',
+                                errorMessage,
                                 'error'
                             );
                         }

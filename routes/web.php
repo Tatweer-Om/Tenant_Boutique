@@ -25,6 +25,7 @@ use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\ExpenseCategoryController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\SMSController;
+use App\Http\Controllers\ReportController;
 
 Route::get('/', function () {
     if (auth()->check()) {
@@ -35,7 +36,7 @@ Route::get('/', function () {
 
 // Language/Locale change route
 Route::post('/change-locale', function (Request $request) {
-    $locale = $request->input('locale', 'ar');
+    $locale = $request->input('locale', 'en');
     if (in_array($locale, ['ar', 'en'])) {
         session(['locale' => $locale]);
         return response()->json(['success' => true, 'locale' => $locale]);
@@ -93,6 +94,8 @@ Route::delete('tailors/{tailor}', [TailorController::class, 'destroy']);
 Route::get('tailors/list', [TailorController::class, 'gettailors']);
 Route::get('tailors/{tailor}', [TailorController::class, 'show']);
 Route::get('tailor_profile/{id}', [TailorController::class, 'tailor_profile'])->name('tailor_profile');
+Route::get('tailor-material-audit', [TailorController::class, 'materialAudit'])->name('tailor_material_audit');
+Route::get('tailor-material-audit/data', [TailorController::class, 'getMaterialAuditData'])->name('tailor_material_audit.data');
 
 // Late Delivery Routes
 Route::post('special-orders/check-late-deliveries', [SpecialOrderController::class, 'checkAndMarkLateDeliveries'])->name('special_orders.check_late');
@@ -223,7 +226,10 @@ Route::get('edit_material/{id}', [MaterialController::class, 'edit_material'])->
 Route::post('update_material', [MaterialController::class, 'update_material'])->name('update_material');
 Route::delete('/delete_material/{id}', [MaterialController::class, 'delete_material'])->name('delete_material');
 Route::get('view_material', [MaterialController::class, 'view_material'])->name('view_material');
+Route::post('materials/add-quantity', [MaterialController::class, 'addQuantity'])->name('materials.add_quantity');
 Route::post('send_material_to_tailor', [TailorController::class, 'send_material_to_tailor'])->name('send_material_to_tailor');
+Route::get('material-quantity-audit', [MaterialController::class, 'materialQuantityAudit'])->name('material.quantity_audit');
+Route::get('material-quantity-audit/data', [MaterialController::class, 'getMaterialQuantityAuditData'])->name('material.quantity_audit.data');
 
 Route::get('stock', [StockController::class, 'index'])->name('stock');
 Route::post('add_stock', [StockController::class, 'add_stock'])->name('add_stock');
@@ -233,6 +239,11 @@ Route::delete('/delete_stock/{id}', [StockController::class, 'delete_stock'])->n
 Route::get('stock/audit', [StockController::class, 'stockAudit'])->name('stock.audit');
 Route::get('stock/audit/list', [StockController::class, 'getStockAuditList'])->name('stock.audit.list');
 Route::get('stock/audit/details', [StockController::class, 'getStockAuditDetails'])->name('stock.audit.details');
+Route::get('stock/comprehensive-audit', [StockController::class, 'comprehensiveAudit'])->name('stock.comprehensive_audit');
+Route::get('stock/comprehensive-audit/list', [StockController::class, 'getComprehensiveAudit'])->name('stock.comprehensive_audit.list');
+Route::get('stock/material-audit', [StockController::class, 'materialAudit'])->name('material.audit');
+Route::get('stock/material-audit/data', [StockController::class, 'getMaterialAuditData'])->name('material.audit.data');
+Route::get('sync-pending-stocks', [StockController::class, 'syncPendingStocks'])->name('sync.pending_stocks');
 
 Route::get('stock/list', [StockController::class, 'getstock']);
 Route::get('stock/{id}', [StockController::class, 'show'])->name('stock.show');
@@ -245,6 +256,20 @@ Route::get('stock_detail', [StockController::class, 'stock_detail'])->name('stoc
 Route::get('get_stock_quantity', [StockController::class, 'get_stock_quantity'])->name('get_stock_quantity');
 Route::get('get_full_stock_details', [StockController::class, 'get_full_stock_details'])->name('get_full_stock_details');
 Route::post('add_quantity', [StockController::class, 'add_quantity'])->name('add_quantity');
+Route::get('abaya-materials', [StockController::class, 'abayaMaterials'])->name('abaya_materials');
+Route::get('abaya-materials/data', [StockController::class, 'getAbayaMaterials'])->name('abaya_materials.data');
+
+
+// api
+
+Route::get('move_stock_to_system', [StockController::class, 'move_stock_to_system'])->name('move_stock_to_system');
+
+// Tailor Payments Routes
+Route::get('tailor_payments', [App\Http\Controllers\TailorPaymentController::class, 'index'])->name('tailor_payments');
+Route::get('tailor_payments/pending', [App\Http\Controllers\TailorPaymentController::class, 'getPendingPayments'])->name('tailor_payments.pending');
+Route::get('tailor_payments/history', [App\Http\Controllers\TailorPaymentController::class, 'getPaymentHistory'])->name('tailor_payments.history');
+Route::get('tailor_payments/accounts', [App\Http\Controllers\TailorPaymentController::class, 'getAccounts'])->name('tailor_payments.accounts');
+Route::post('tailor_payments/process', [App\Http\Controllers\TailorPaymentController::class, 'processPayment'])->name('tailor_payments.process');
 
 Route::get('branch', [BranchController::class, 'index'])->name('branch');
 Route::post('add_branch', [BranchController::class, 'add_branch'])->name('add_branch');
@@ -257,6 +282,7 @@ Route::get('send_request', [SpecialOrderController::class, 'send_request'])->nam
 Route::get('send_request/data', [SpecialOrderController::class, 'getTailorAssignmentsData'])->name('send_request.data');
 Route::post('send_request/assign', [SpecialOrderController::class, 'assignItemsToTailor'])->name('send_request.assign');
 Route::post('send_request/receive', [SpecialOrderController::class, 'markTailorItemsReceived'])->name('send_request.receive');
+Route::get('send_request/export-excel', [SpecialOrderController::class, 'exportAbayasToTailorExcel'])->name('send_request.export_excel');
 Route::get('tailor-orders-list', [SpecialOrderController::class, 'tailorOrdersList'])->name('tailor_orders_list');
 Route::get('tailor-orders-list/data', [SpecialOrderController::class, 'getTailorOrdersList'])->name('tailor_orders_list.data');
 Route::get('tailor-orders-list/export-pdf', [SpecialOrderController::class, 'exportTailorOrdersPDF'])->name('tailor_orders_list.export_pdf');
@@ -265,6 +291,7 @@ Route::get('tailor-orders-list/export-excel', [SpecialOrderController::class, 'e
 Route::get('maintenance', [SpecialOrderController::class, 'maintenance'])->name('maintenance');
 Route::get('maintenance/data', [SpecialOrderController::class, 'getMaintenanceData'])->name('maintenance.data');
 Route::get('maintenance/history', [SpecialOrderController::class, 'getRepairHistory'])->name('maintenance.history');
+Route::get('maintenance/payment-history', [SpecialOrderController::class, 'getMaintenancePaymentHistory'])->name('maintenance.payment_history');
 Route::get('maintenance/search-delivered', [SpecialOrderController::class, 'searchDeliveredOrders'])->name('maintenance.search_delivered');
 Route::get('maintenance/order-items', [SpecialOrderController::class, 'getDeliveredOrderItems'])->name('maintenance.order_items');
 Route::post('maintenance/send-repair', [SpecialOrderController::class, 'sendForRepair'])->name('maintenance.send_repair');
@@ -273,6 +300,7 @@ Route::post('maintenance/deliver', [SpecialOrderController::class, 'markRepaired
 
 Route::get('spcialorder', [SpecialOrderController::class, 'index'])->name('spcialorder');
 Route::post('add_spcialorder', [SpecialOrderController::class, 'add_specialorder'])->name('add_spcialorder');
+Route::post('special-order/shipping-fee', [SpecialOrderController::class, 'getShippingFee'])->name('special_order.shipping_fee');
 Route::get('view_special_order', [SpecialOrderController::class, 'view_special_order'])->name('view_special_order');
 Route::get('special-order-bill/{id}', [SpecialOrderController::class, 'showBill'])->name('special_order.bill');
 Route::get('get_orders_list', [SpecialOrderController::class, 'getOrdersList'])->name('get_orders_list');
@@ -283,6 +311,7 @@ Route::post('edit_spcialorder', [SpecialOrderController::class, 'edit_spcialorde
 Route::post('update_spcialorder', [SpecialOrderController::class, 'update_spcialorder'])->name('update_spcialorder');
 Route::post('delete_spcialorder', [SpecialOrderController::class, 'delete_spcialorder'])->name('delete_spcialorder');
 Route::get('search_abayas', [SpecialOrderController::class, 'searchAbayas'])->name('search_abayas');
+Route::get('send_request/export-pdf', [SpecialOrderController::class, 'exportAbayasToTailorPDF'])->name('send_request.export_pdf');
 
 Route::get('wharehouse', [WharehouseController::class, 'index'])->name('wharehouse');
 Route::post('add_wharehouse', [WharehouseController::class, 'add_wharehouse'])->name('add_wharehouse');
@@ -306,11 +335,19 @@ Route::post('save_settlement', [WharehouseController::class, 'save_settlement'])
 Route::get('get_boutiques_list', [WharehouseController::class, 'get_boutiques_list'])->name('get_boutiques_list');
 Route::get('get_stats', [WharehouseController::class, 'get_stats'])->name('get_stats');
 Route::get('settlement', [WharehouseController::class, 'settlement'])->name('settlement');
+Route::get('get_website_current_qty', [WharehouseController::class, 'get_website_current_qty'])->name('get_website_current_qty');
 
+
+// Bulk: sync ALL transfer_items where to_location=channel-1 and stock.website_data_delivery_status=1
+Route::match(['get', 'post'], 'sync-transfer-items', [
+    WharehouseController::class,
+    'syncPendingTransferItemsToWebsite'
+])->name('sync.transfer.items');
 Route::get('pos', [PosController::class, 'index'])->name('pos');
 Route::get('pos/stock/{id}', [PosController::class, 'getStockDetails'])->name('pos.stock.details');
 Route::get('pos/customers', [PosController::class, 'searchCustomers'])->name('pos.customers.search');
 Route::post('pos/orders', [PosController::class, 'store'])->name('pos.orders.store');
+Route::post('pos/shipping-fee', [PosController::class, 'getShippingFee'])->name('pos.shipping_fee');
 Route::get('pos/cities', [PosController::class, 'citiesByArea'])->name('pos.cities.by_area');
 Route::get('pos/orders/list', [PosController::class, 'ordersList'])->name('pos.orders.list');
 Route::get('pos/orders/list/data', [PosController::class, 'getOrdersList'])->name('pos.orders.list.data');
@@ -318,3 +355,27 @@ Route::post('pos/orders/update-delivery-status', [PosController::class, 'updateD
 Route::get('pos/active-channels', [PosController::class, 'getActiveChannels'])->name('pos.active_channels');
 Route::post('pos/select-channel', [PosController::class, 'selectChannel'])->name('pos.select_channel');
 Route::get('pos_bill', [PosController::class, 'pos_bill'])->name('pos_bill');
+
+Route::get('receive_website_orders', [WharehouseController::class, 'receiveWebsiteOrders'])->name('receive_website_orders');
+
+// Reports Routes
+Route::get('reports/pos-income', [ReportController::class, 'posIncomeReport'])->name('reports.pos_income');
+Route::get('reports/pos-income/data', [ReportController::class, 'getPosIncomeReport'])->name('reports.pos_income.data');
+Route::get('reports/pos-income/export-excel', [ReportController::class, 'exportPosIncomeExcel'])->name('reports.pos_income.export_excel');
+Route::get('reports/pos-income/export-pdf', [ReportController::class, 'exportPosIncomePdf'])->name('reports.pos_income.export_pdf');
+
+Route::get('reports/special-orders-income', [ReportController::class, 'specialOrdersIncomeReport'])->name('reports.special_orders_income');
+Route::get('reports/special-orders-income/data', [ReportController::class, 'getSpecialOrdersIncomeReport'])->name('reports.special_orders_income.data');
+Route::get('reports/special-orders-income/export-excel', [ReportController::class, 'exportSpecialOrdersIncomeExcel'])->name('reports.special_orders_income.export_excel');
+Route::get('reports/special-orders-income/export-pdf', [ReportController::class, 'exportSpecialOrdersIncomePdf'])->name('reports.special_orders_income.export_pdf');
+
+Route::get('reports/settlement-profit', [ReportController::class, 'settlementProfitReport'])->name('reports.settlement_profit');
+Route::get('reports/settlement-profit/data', [ReportController::class, 'getSettlementProfitReport'])->name('reports.settlement_profit.data');
+Route::get('reports/settlement-profit/export-excel', [ReportController::class, 'exportSettlementProfitExcel'])->name('reports.settlement_profit.export_excel');
+Route::get('reports/settlement-profit/export-pdf', [ReportController::class, 'exportSettlementProfitPdf'])->name('reports.settlement_profit.export_pdf');
+Route::get('reports/profit-expense', [ReportController::class, 'profitExpenseReport'])->name('reports.profit_expense');
+Route::get('reports/profit-expense/data', [ReportController::class, 'getProfitExpenseReport'])->name('reports.profit_expense.data');
+Route::get('reports/daily-sales', [ReportController::class, 'dailySalesReport'])->name('reports.daily_sales');
+Route::get('reports/daily-sales/data', [ReportController::class, 'getDailySalesReport'])->name('reports.daily_sales.data');
+Route::get('reports/daily-sales/export-excel', [ReportController::class, 'exportDailySalesExcel'])->name('reports.daily_sales.export_excel');
+Route::get('yearly_income_report', [ReportController::class, 'yearlyIncomeReport'])->name('reports.yearly_income_report');

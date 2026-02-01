@@ -11,7 +11,41 @@
     }
 </style>
 <main class="flex-1 p-4 md:p-6"
-    x-data="{ showDetails: false, loading: false, showQuantity: false, showFullDetails: false, actionType: 'add', fullDetailsLoading: false }">
+    x-data="{ 
+        showDetails: false, 
+        loading: false, 
+        showQuantity: false, 
+        showFullDetails: false, 
+        actionType: 'add', 
+        fullDetailsLoading: false,
+        updateQuantityInputs() {
+            const mode = this.actionType;
+            const self = this;
+            // Use setTimeout to ensure DOM is ready and jQuery is available
+            setTimeout(() => {
+                if (typeof jQuery !== 'undefined' || typeof $ !== 'undefined') {
+                    const $ = typeof jQuery !== 'undefined' ? jQuery : window.$;
+                    try {
+                        document.querySelectorAll('.qty-input').forEach(function(input) {
+                            const $input = $(input);
+                            const availableQty = parseFloat($input.data('available-qty')) || 0;
+                            if (mode === 'pull') {
+                                // For pull mode: restrict to available quantity
+                                $input.attr('max', availableQty);
+                                $input.attr('min', '1');
+                            } else {
+                                // For add mode: remove restrictions (allow any value)
+                                $input.removeAttr('max');
+                                $input.removeAttr('min');
+                            }
+                        });
+                    } catch (e) {
+                        // Silently fail - don't break the form
+                    }
+                }
+            }, 150);
+        }
+    }">
     <div class="w-full max-w-[1920px] mx-auto">
 
         <!-- Page title and add button -->
@@ -48,81 +82,39 @@
 
 
         <!-- Mobile cards -->
-        <section class="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:hidden gap-4">
-            @for ($i = 1; $i <= 2; $i++)
-                <div class="bg-white rounded-xl shadow-sm border border-pink-100 p-4 flex flex-col gap-3">
-                <div class="flex gap-4">
-                    <div class="w-20 h-24 rounded-md overflow-hidden bg-gray-100 flex-shrink-0">
-                        <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuBvKg5AhaDdRqA3r4CQmvGTzP9_cvocRFo_JpwXjGANrU-NTxnLJbPXHosBJvcOJrOMF7iniPDAqlDISIoKa9vYPlxQl1fxFUf_wWcg-2ZWZ4zVtj8DtYntIcmMCef6Gi9kc2-SNeJuOFhmVe3ktBod2zxXdlJVBktsokamFz6WtCj96iytmlQLinBdB_5yxzeepfYJBESQ9mj3dmkh_xJ9jv55Un9VL_VDKXordI9gSug-gM3t_dTLQp4G7Bzh8K5I0OZICpGkG5M"
-                            alt="{{ trans('messages.abaya_image', [], session('locale')) }}" class="w-full h-full object-cover" />
-                    </div>
-                    <div class="flex-1 text-sm">
-                        <div class="flex justify-between items-center">
-                            <h3 class="font-bold text-gray-900">ABY10{{ $i }}</h3>
-                            <span class="text-[var(--primary-color)] font-semibold">
-                                {{ trans('messages.size', [], session('locale')) }}: M
-                            </span>
-                        </div>
-                        <p class="text-gray-600">
-                            {{ trans('messages.color_material', [], session('locale')) }}
-                        </p>
-                        <p class="text-gray-600">
-                            {{ trans('messages.quantity', [], session('locale')) }}: {{ 8 + $i }}
-                        </p>
-                    </div>
-                </div>
+        <section class="mt-4 xl:hidden">
+            <div id="mobile_stock_cards" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+        </section>
 
-                <div class="mt-4 border-t pt-3">
-                    <div class="flex justify-around text-xs font-semibold text-gray-600">
-                        <button @click="loading = true; setTimeout(() => { loading = false; showDetails = true }, 800)"
-                            class="flex flex-col items-center gap-1 hover:text-[var(--primary-color)] transition">
-                            <span class="material-symbols-outlined bg-pink-50 text-[var(--primary-color)] p-2 rounded-full">info</span>
-                            {{ trans('messages.details', [], session('locale')) }}
-                        </button>
+        <!-- Desktop table -->
+        <section class="hidden xl:block mt-6">
+            <div class="rounded-2xl overflow-x-auto border border-pink-100 bg-white shadow-md hover:shadow-lg transition mx-auto">
+                <table class="w-full text-sm min-w-full">
+                    <thead class="bg-gradient-to-l from-pink-50 to-pink-100 text-gray-800 sticky top-0 z-10">
+                        <tr>
+                            <th class="text-center px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[200px]">{{ trans('messages.image', [], session('locale')) }} / {{ trans('messages.design_name', [], session('locale')) }}</th>
+                            <th class="text-center px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[120px]">{{ trans('messages.abaya_code', [], session('locale')) }}</th>
+                            <th class="text-center px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[100px]">{{ trans('messages.color', [], session('locale')) }}</th>
+                            <th class="text-center px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[100px]">{{ trans('messages.quantity', [], session('locale')) }}</th>
+                            <th class="text-center px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[120px]">{{ trans('messages.sales_price', [], session('locale')) }}</th>
+                            <th class="text-center px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[150px]">{{ trans('messages.tailor', [], session('locale')) ?: 'Tailor' }}</th>
+                            <th class="text-center px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[200px]">{{ trans('messages.actions', [], session('locale')) }}</th>
+                        </tr>
+                    </thead>
 
-                        <button @click="showQuantity = true"
-                            class="flex flex-col items-center gap-1 hover:text-green-600 transition">
-                            <span class="material-symbols-outlined bg-green-50 text-green-600 p-2 rounded-full text-base">add</span>
-                            {{ trans('messages.enter_quantity', [], session('locale')) }}
-                        </button>
+                    <tbody id="desktop_stock_body"></tbody>
+                </table>
 
-                        <button class="flex flex-col items-center gap-1 hover:text-blue-500 transition">
-                            <span class="material-symbols-outlined bg-blue-50 text-blue-500 p-2 rounded-full">edit</span>
-                            {{ trans('messages.edit', [], session('locale')) }}
-                        </button>
+                <!-- Pagination -->
+            </div>
+        </section>
+    <ul id="stock_pagination" class="flex flex-wrap justify-center items-center gap-1.5 mt-4 list-none pl-0 max-w-full"></ul>
 
-                        <button class="flex flex-col items-center gap-1 hover:text-red-500 transition">
-                            <span class="material-symbols-outlined bg-red-50 text-red-500 p-2 rounded-full">delete</span>
-                            {{ trans('messages.delete', [], session('locale')) }}
-                        </button>
-                    </div>
-                </div>
+    <!-- Pagination loader - shown when changing page via pagination buttons -->
+    <div id="stock_pagination_loader" class="fixed inset-0 flex flex-col items-center justify-center bg-black/70 z-[9998]" style="display: none;">
+        <div class="loader border-4 border-pink-200 border-t-[var(--primary-color)] rounded-full w-16 h-16 animate-spin mb-4"></div>
+        <p class="text-white text-lg font-bold">{{ trans('messages.loading_details', [], session('locale')) }}</p>
     </div>
-    @endfor
-    </section>
-
-    <!-- Desktop table -->
-    <section class="hidden xl:block mt-6">
-        <div class="rounded-2xl overflow-x-auto border border-pink-100 bg-white shadow-md hover:shadow-lg transition mx-auto">
-            <table class="w-full text-sm min-w-full">
-                <thead class="bg-gradient-to-l from-pink-50 to-pink-100 text-gray-800 sticky top-0 z-10">
-                    <tr>
-                        <th class="text-center px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[200px]">{{ trans('messages.image', [], session('locale')) }} / {{ trans('messages.design_name', [], session('locale')) }}</th>
-                        <th class="text-center px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[100px]">{{ trans('messages.size', [], session('locale')) }}</th>
-                        <th class="text-center px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[100px]">{{ trans('messages.color', [], session('locale')) }}</th>
-                        <th class="text-center px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[100px]">{{ trans('messages.quantity', [], session('locale')) }}</th>
-                        <th class="text-center px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[200px]">{{ trans('messages.actions', [], session('locale')) }}</th>
-                    </tr>
-                </thead>
-
-                <tbody id="desktop_stock_body"></tbody>
-            </table>
-            <div id="mobile_stock_cards" class="md:hidden"></div>
-
-            <!-- Pagination -->
-        </div>
-    </section>
-    <ul id="stock_pagination" class="flex justify-center gap-2 mt-4"></ul>
 
     </div>
 
@@ -249,44 +241,104 @@
         class="fixed inset-0 bg-black/60 z-[9998] flex items-center justify-center p-4 overflow-y-auto"
         @keydown.escape.window="showQuantity = false">
         <div @click.away="showQuantity = false" @click.stop
-            class="bg-white w-full max-w-6xl my-8 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100vh-4rem)]">
+            class="bg-white w-full max-w-5xl my-8 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100vh-4rem)]">
             
             <!-- Form start -->
             <form id="save_qty" class="flex flex-col h-full">
                 @csrf
 
                 <!-- Header -->
-                <div class="flex justify-between items-center p-4 md:p-5 border-b bg-gradient-to-r from-[var(--primary-color)] to-[#5e4a9e] flex-shrink-0">
-                    <h5 class="text-white text-lg md:text-xl font-bold flex items-center">
-                        <span class="material-symbols-outlined me-2">inventory_2</span>
+                <div class="flex justify-between items-center p-3 md:p-4 border-b bg-gradient-to-r from-[var(--primary-color)] to-[#5e4a9e] flex-shrink-0">
+                    <h5 class="text-white text-base md:text-lg font-bold flex items-center">
+                        <span class="material-symbols-outlined me-2 text-lg">inventory_2</span>
                         {{ trans('messages.manage_quantities', [], session('locale')) }}
                     </h5>
                     <button type="button" @click="showQuantity = false" class="text-white hover:text-gray-200 transition">
-                        <span class="material-symbols-outlined text-2xl md:text-3xl">close</span>
+                        <span class="material-symbols-outlined text-2xl">close</span>
                     </button>
                 </div>
 
                 <!-- Body - Scrollable -->
-                <div class="p-4 md:p-6 overflow-y-auto flex-1 bg-gray-50 min-h-0" style="max-height: calc(90vh - 180px);">
+                <div class="p-3 md:p-4 overflow-y-auto flex-1 bg-gray-50 min-h-0" style="max-height: calc(90vh - 160px);">
+
+                    <!-- Warning Note -->
+                    <div class="mb-4 p-3 bg-amber-50 border-l-4 border-amber-500 rounded-r-lg flex items-start gap-3">
+                        <span class="material-symbols-outlined text-amber-600 flex-shrink-0 mt-0.5">warning</span>
+                        <div class="flex-1">
+                            <p class="text-sm font-semibold text-amber-800 mb-1">
+                                {{ trans('messages.important_note', [], session('locale')) ?: 'Important Note' }}
+                            </p>
+                            <p class="text-xs text-amber-700">
+                                {{ trans('messages.tailor_payment_warning', [], session('locale')) ?: 'Please be careful while adding quantity or pulling because tailor payment is linked with this pull and addition of quantity.' }}
+                            </p>
+                        </div>
+                    </div>
 
                     <!-- Action Type Tabs -->
-                    <div class="flex justify-center mb-4 md:mb-6 sticky top-0 bg-gray-50 pb-4 z-10">
+                    <div class="flex justify-center mb-3 sticky top-0 bg-gray-50 pb-3 z-10">
                         <div class="inline-flex rounded-lg shadow-sm border border-gray-200 bg-white overflow-hidden" role="group">
-                            <input type="radio" class="hidden" name="qtyType" id="add" value="add" x-model="actionType">
+                            <input type="radio" class="hidden" name="qtyType" id="add" value="add" x-model="actionType" @change="updateQuantityInputs()">
                             <label for="add" 
                                 :class="actionType === 'add' ? 'bg-[var(--primary-color)] text-white' : 'bg-white text-gray-700 hover:bg-gray-50'"
-                                class="px-4 md:px-5 py-2 md:py-3 text-sm md:text-base font-semibold cursor-pointer transition-colors flex items-center border-r border-gray-200">
-                                <span class="material-symbols-outlined me-1 md:me-2 text-base md:text-lg">add_circle</span>
+                                class="px-4 py-2 text-sm font-semibold cursor-pointer transition-colors flex items-center border-r border-gray-200">
+                                <span class="material-symbols-outlined me-1.5 text-base">add_circle</span>
                                 {{ trans('messages.add_new', [], session('locale')) }}
                             </label>
 
-                            <input type="radio" class="hidden" name="qtyType" id="pull" value="pull" x-model="actionType">
+                            <input type="radio" class="hidden" name="qtyType" id="pull" value="pull" x-model="actionType" @change="updateQuantityInputs()">
                             <label for="pull"
                                 :class="actionType === 'pull' ? 'bg-red-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'"
-                                class="px-4 md:px-5 py-2 md:py-3 text-sm md:text-base font-semibold cursor-pointer transition-colors flex items-center">
-                                <span class="material-symbols-outlined me-1 md:me-2 text-base md:text-lg">remove_circle</span>
+                                class="px-4 py-2 text-sm font-semibold cursor-pointer transition-colors flex items-center">
+                                <span class="material-symbols-outlined me-1.5 text-base">remove_circle</span>
                                 {{ trans('messages.pull_quantity', [], session('locale')) }}
                             </label>
+                        </div>
+                    </div>
+
+                    <!-- Tailor Information Section (only visible when adding) -->
+                    <div x-show="actionType === 'add'" 
+                        x-transition
+                        class="mb-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl shadow-sm">
+                        <div class="flex items-start gap-3 mb-4">
+                            <div class="flex-shrink-0 mt-1">
+                                <span class="material-symbols-outlined text-blue-600 text-2xl">person</span>
+                            </div>
+                            <div class="flex-1">
+                                <h6 class="font-bold text-blue-900 mb-3 flex items-center text-sm md:text-base">
+                                    <span class="material-symbols-outlined me-2 text-base md:text-lg">info</span>
+                                    {{ trans('messages.tailor_information', [], session('locale')) ?: 'Tailor Information' }}
+                                </h6>
+                                
+                                <!-- Original Tailor Display -->
+                                <div class="mb-4 p-3 bg-white rounded-xl border border-blue-200 shadow-sm">
+                                    <label class="block text-xs font-semibold text-gray-600 mb-2">
+                                        {{ trans('messages.original_tailor', [], session('locale')) ?: 'Original Tailor of this Stock' }}
+                                    </label>
+                                    <div id="original_tailor_display" class="flex flex-wrap gap-2">
+                                        <span class="text-sm text-gray-500 italic">{{ trans('messages.loading', [], session('locale')) ?: 'Loading...' }}</span>
+                                    </div>
+                                </div>
+
+                                <!-- Tailor Selection Dropdown -->
+                                <div class="p-3 bg-white rounded-xl border-2 border-blue-300 shadow-sm">
+                                    <label for="selected_tailor_id" class="block text-xs font-bold text-blue-700 mb-2 flex items-center">
+                                        <span class="material-symbols-outlined me-1 text-sm">arrow_forward</span>
+                                        {{ trans('messages.select_tailor_for_quantity', [], session('locale')) ?: 'Select Tailor for this Quantity' }}
+                                        <span class="text-red-500 ml-1">*</span>
+                                    </label>
+                                    <select name="selected_tailor_id" 
+                                            id="selected_tailor_id" 
+                                            :required="actionType === 'add'"
+                                            class="w-full h-11 px-4 rounded-lg border-2 border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm md:text-base font-semibold bg-white shadow-sm transition">
+                                        <option value="">{{ trans('messages.select_tailor', [], session('locale')) ?: '-- Select Tailor --' }}</option>
+                                        <!-- Options will be populated via JavaScript -->
+                                    </select>
+                                    <p class="text-xs text-gray-500 mt-2 flex items-center">
+                                        <span class="material-symbols-outlined me-1 text-xs">help</span>
+                                        {{ trans('messages.select_tailor_help', [], session('locale')) ?: 'Choose which tailor this quantity is being added for' }}
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -302,15 +354,15 @@
                     <hr class="my-4 md:my-6 border-gray-300">
 
                     <!-- 2. By Size + Color -->
-                    <section class="mb-4 md:mb-6">
-                        <h6 class="font-bold text-[var(--primary-color)] mb-2 md:mb-3 flex items-center text-sm md:text-base">
-                            <span class="bg-[var(--primary-color)] text-white rounded-full w-5 h-5 md:w-6 md:h-6 flex items-center justify-center text-xs mr-2">2</span>
+                    <section class="mb-3">
+                        <h6 class="font-bold text-[var(--primary-color)] mb-2 flex items-center text-sm">
+                            <span class="bg-[var(--primary-color)] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2">2</span>
                             {{ trans('messages.by_size_color', [], session('locale')) }}
                         </h6>
                         <div id="colorsize_container"></div>
                     </section>
 
-                    <hr class="my-4 md:my-6 border-gray-300">
+                    <hr class="my-3 border-gray-300">
 
                     <!-- 3. By Color Only -->
                     <section class="mb-4 md:mb-6 hidden">
@@ -341,16 +393,16 @@
                 </div>
 
                 <!-- Footer - Always Visible -->
-                <div class="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 p-4 md:p-5 border-t bg-white flex-shrink-0 shadow-lg">
+                <div class="flex flex-col sm:flex-row justify-end gap-2 p-3 border-t bg-white flex-shrink-0 shadow-lg">
                     <button type="button" 
                         @click="showQuantity = false"
-                        class="w-full sm:w-auto px-4 md:px-5 py-2.5 md:py-3 rounded-lg border border-gray-300 bg-white text-gray-700 font-semibold hover:bg-gray-50 transition text-sm md:text-base">
+                        class="w-full sm:w-auto px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 font-semibold hover:bg-gray-50 transition text-sm">
                         {{ trans('messages.cancel', [], session('locale')) }}
                     </button>
                     <button type="submit" 
-                        class="w-full sm:w-auto px-4 md:px-5 py-2.5 md:py-3 rounded-lg text-white font-semibold shadow-md hover:shadow-lg transition text-sm md:text-base"
+                        class="w-full sm:w-auto px-4 py-2 rounded-lg text-white font-semibold shadow-md hover:shadow-lg transition text-sm"
                         style="background: linear-gradient(135deg, var(--primary-color), #5e4a9e);">
-                        <span class="material-symbols-outlined align-middle me-2 text-base">check</span>
+                        <span class="material-symbols-outlined align-middle me-2 text-sm">check</span>
                         {{ trans('messages.save_operation', [], session('locale')) }}
                     </button>
                 </div>

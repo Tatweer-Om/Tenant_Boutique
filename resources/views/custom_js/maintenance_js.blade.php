@@ -32,6 +32,24 @@ document.addEventListener('alpine:init', () => {
     selectedOrderItems: [],
     loadingOrderItems: false,
     paymentAmountError: '',
+    itemQuantities: {}, // Store quantity for each selected item
+    
+    // ---------------- One-time click guards ----------------
+    _lockButton(event) {
+      const btn = event?.currentTarget;
+      if (!btn) return null;
+      if (btn.dataset.busy === '1') return null; // already clicked
+      btn.dataset.busy = '1';
+      btn.disabled = true;
+      btn.classList.add('opacity-60', 'cursor-not-allowed');
+      return btn;
+    },
+    _unlockButton(btn) {
+      if (!btn) return;
+      btn.disabled = false;
+      btn.classList.remove('opacity-60', 'cursor-not-allowed');
+      delete btn.dataset.busy;
+    },
 
     // Pagination
     page: 1,
@@ -43,11 +61,19 @@ document.addEventListener('alpine:init', () => {
     statistics: {
       delivered_to_tailor: 0,
       received_from_tailor: 0,
+      delivered_count: 0,
+      total_delivery_charges: 0,
+      total_repair_cost: 0,
     },
+    paymentHistory: [],
+    loadingPaymentHistory: false,
+    paymentHistoryPage: 1,
+    paymentHistoryPerPage: 10,
 
     async init() {
       await this.loadData();
       await this.loadRepairHistory();
+      await this.loadPaymentHistory();
       await this.loadAccounts();
       // Reset to page 1 when search changes
       this.$watch('search', () => {
@@ -128,6 +154,36 @@ document.addEventListener('alpine:init', () => {
         }
       } finally {
         this.loadingHistory = false;
+      }
+    },
+
+    async loadPaymentHistory() {
+      this.loadingPaymentHistory = true;
+      try {
+        const response = await fetch('{{ route('maintenance.payment_history') }}');
+        const data = await response.json();
+        
+        console.log('Payment History Response:', data);
+        
+        if (data.success) {
+          this.paymentHistory = data.payments || [];
+          this.paymentHistoryPage = 1; // Reset to first page when loading new data
+          console.log('Payment History loaded:', this.paymentHistory.length, 'payments');
+        } else {
+          console.error('Payment History Error:', data.message);
+          throw new Error(data.message || '{{ trans('messages.failed_to_load_payment_history', [], session('locale')) ?: 'Failed to load payment history' }}');
+        }
+      } catch (error) {
+        console.error('Error loading payment history:', error);
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'error',
+            title: '{{ trans('messages.error', [], session('locale')) }}',
+            text: error.message
+          });
+        }
+      } finally {
+        this.loadingPaymentHistory = false;
       }
     },
 
@@ -322,8 +378,8 @@ document.addEventListener('alpine:init', () => {
 
     handleCostBearerChange() {
       if (this.costBearer === 'company') {
-        this.deliveryCharges = 0;
-        this.repairCost = 0;
+        // Company can still have delivery/repair costs; only disable payment collection fields.
+        this.deliverAccountId = '';
         this.deliverPaymentAmount = 0;
         this.paymentAmountError = '';
       } else {
@@ -361,7 +417,7 @@ document.addEventListener('alpine:init', () => {
       this.showNotesModal = true;
     },
 
-    async performAction() {
+    async performAction(event) {
       if (this.selectedItem.maintenance_status === 'received_from_tailor') {
         if (typeof Swal !== 'undefined') {
           Swal.fire({
@@ -375,6 +431,8 @@ document.addEventListener('alpine:init', () => {
 
       if (this.selectedItem.maintenance_status === 'delivered_to_tailor') {
         // Receive from tailor - just receive, no costs
+        const btn = this._lockButton(event);
+        if (event && !btn) return;
         try {
           const response = await fetch('{{ route('maintenance.receive') }}', {
             method: 'POST',
@@ -415,6 +473,8 @@ document.addEventListener('alpine:init', () => {
           } else {
             alert('{{ trans('messages.error', [], session('locale')) }}: ' + error.message);
           }
+        } finally {
+          this._unlockButton(btn);
         }
       } else {
         // Send to tailor
@@ -449,6 +509,8 @@ document.addEventListener('alpine:init', () => {
           }
         }
 
+        const btn = this._lockButton(event);
+        if (event && !btn) return;
         try {
           const response = await fetch('{{ route('maintenance.send_repair') }}', {
             method: 'POST',
@@ -493,6 +555,8 @@ document.addEventListener('alpine:init', () => {
           } else {
             alert('{{ trans('messages.error', [], session('locale')) }}: ' + error.message);
           }
+        } finally {
+          this._unlockButton(btn);
         }
       }
     },
@@ -553,6 +617,7 @@ document.addEventListener('alpine:init', () => {
       this.selectedOrderItems = [];
       this.selectedTailorId = '';
       this.maintenanceNotes = '';
+      this.itemQuantities = {};
       this.loadingOrderItems = true;
       this.showOrderItemsModal = true;
       this.deliveredOrderSearch = '';
@@ -563,7 +628,15 @@ document.addEventListener('alpine:init', () => {
         const data = await response.json();
         
         if (data.success) {
-          this.orderItems = data.items || [];
+          // Initialize selectedQuantity for each item and ensure quantity is a number
+          this.orderItems = (data.items || []).map(item => {
+            const quantity = parseInt(item.quantity) || 1;
+            return {
+              ...item,
+              quantity: quantity, // Ensure quantity is a number
+              selectedQuantity: quantity // Initialize to full quantity
+            };
+          });
           this.selectedOrder = data.order || order;
         } else {
           throw new Error(data.message || '{{ trans('messages.failed_to_load_items', [], session('locale')) ?: 'Failed to load items' }}');
@@ -583,7 +656,39 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
-    async sendSelectedItemsToMaintenance() {
+    handleItemCheckboxChange(item) {
+      const itemId = String(item.id);
+      if (this.selectedOrderItems.includes(itemId)) {
+        // Item is checked - ensure selectedQuantity is set
+        if (!item.selectedQuantity || item.selectedQuantity < 1) {
+          item.selectedQuantity = item.quantity || 1;
+        }
+        // Store quantity in itemQuantities object
+        this.itemQuantities[itemId] = item.selectedQuantity;
+      } else {
+        // Item is unchecked - remove from quantities
+        delete this.itemQuantities[itemId];
+        item.selectedQuantity = item.quantity || 1;
+      }
+    },
+
+    validateItemQuantity(item) {
+      const qty = parseInt(item.selectedQuantity) || 1;
+      const maxQty = item.quantity || 1;
+      
+      if (qty < 1) {
+        item.selectedQuantity = 1;
+      } else if (qty > maxQty) {
+        item.selectedQuantity = maxQty;
+      }
+      
+      // Update stored quantity
+      if (this.selectedOrderItems.includes(item.id)) {
+        this.itemQuantities[item.id] = item.selectedQuantity;
+      }
+    },
+
+    async sendSelectedItemsToMaintenance(event) {
       if (this.selectedOrderItems.length === 0) {
         if (typeof Swal !== 'undefined') {
           Swal.fire({
@@ -595,20 +700,37 @@ document.addEventListener('alpine:init', () => {
         return;
       }
 
-      // Filter out items that are already in maintenance
+      // Get all selected items (regardless of maintenance status)
       const availableItems = this.orderItems.filter(item => 
-        this.selectedOrderItems.includes(item.id) && !item.maintenance_status
+        this.selectedOrderItems.includes(String(item.id))
       );
 
       if (availableItems.length === 0) {
         if (typeof Swal !== 'undefined') {
           Swal.fire({
-            icon: 'info',
-            title: '{{ trans('messages.info', [], session('locale')) ?: 'Info' }}',
-            text: '{{ trans('messages.selected_items_already_in_maintenance', [], session('locale')) ?: 'Selected items are already in maintenance' }}'
+            icon: 'warning',
+            title: '{{ trans('messages.required_field', [], session('locale')) }}',
+            text: '{{ trans('messages.please_select_items', [], session('locale')) ?: 'Please select at least one item' }}'
           });
         }
         return;
+      }
+
+      // Validate quantities for all selected items
+      for (const item of availableItems) {
+        const qty = parseInt(item.selectedQuantity) || 1;
+        const maxQty = item.quantity || 1;
+        
+        if (qty < 1 || qty > maxQty) {
+          if (typeof Swal !== 'undefined') {
+            Swal.fire({
+              icon: 'warning',
+              title: '{{ trans('messages.invalid_quantity', [], session('locale')) ?: 'Invalid Quantity' }}',
+              text: '{{ trans('messages.quantity_must_be_between', [], session('locale')) ?: 'Quantity must be between 1 and' }} ' + maxQty + ' {{ trans('messages.for_item', [], session('locale')) ?: 'for item' }}: ' + item.design_name
+            });
+          }
+          return;
+        }
       }
 
       // Check if tailor is selected
@@ -623,9 +745,17 @@ document.addEventListener('alpine:init', () => {
         return;
       }
 
-      // Send all selected items to tailor
+      // Prepare items with quantities
+      const itemsWithQuantities = availableItems.map(item => ({
+        item_id: parseInt(item.id),
+        quantity: parseInt(item.selectedQuantity) || parseInt(item.quantity) || 1
+      }));
+
+      const btn = this._lockButton(event);
+      if (event && !btn) return;
+
+      // Send selected items to tailor with their quantities
       try {
-        const itemIds = availableItems.map(item => item.id);
         const response = await fetch('{{ route('maintenance.send_repair') }}', {
           method: 'POST',
           headers: {
@@ -633,9 +763,7 @@ document.addEventListener('alpine:init', () => {
             'X-CSRF-TOKEN': '{{ csrf_token() }}'
           },
           body: JSON.stringify({
-            item_id: itemIds[0], // First item ID as representative
-            item_ids: itemIds, // All selected item IDs
-            quantity: null, // Send all items
+            items: itemsWithQuantities, // Array of {item_id, quantity}
             tailor_id: this.selectedTailorId,
             maintenance_notes: this.maintenanceNotes || ''
           })
@@ -655,6 +783,7 @@ document.addEventListener('alpine:init', () => {
           this.selectedOrderItems = [];
           this.selectedTailorId = '';
           this.maintenanceNotes = '';
+          this.itemQuantities = {};
           await this.loadData();
         } else {
           throw new Error(data.message || '{{ trans('messages.failed_to_send_item', [], session('locale')) }}');
@@ -668,10 +797,12 @@ document.addEventListener('alpine:init', () => {
             text: error.message
           });
         }
+      } finally {
+        this._unlockButton(btn);
       }
     },
 
-    async performDeliver() {
+    async performDeliver(event) {
       if (!this.costBearer) {
         if (typeof Swal !== 'undefined') {
           Swal.fire({
@@ -731,6 +862,9 @@ document.addEventListener('alpine:init', () => {
         }
       }
 
+      const btn = this._lockButton(event);
+      if (event && !btn) return;
+
       try {
         const response = await fetch('{{ route('maintenance.deliver') }}', {
           method: 'POST',
@@ -762,6 +896,10 @@ document.addEventListener('alpine:init', () => {
           }
           this.showDeliverModal = false;
           await this.loadData();
+          // Reload payment history if we're on that tab
+          if (this.activeTab === 'payment_history') {
+            await this.loadPaymentHistory();
+          }
         } else {
           throw new Error(data.message || '{{ trans('messages.failed_to_deliver_item', [], session('locale')) ?: 'Failed to deliver item' }}');
         }
@@ -776,6 +914,8 @@ document.addEventListener('alpine:init', () => {
         } else {
           alert('{{ trans('messages.error', [], session('locale')) }}: ' + error.message);
         }
+      } finally {
+        this._unlockButton(btn);
       }
     }
   }));

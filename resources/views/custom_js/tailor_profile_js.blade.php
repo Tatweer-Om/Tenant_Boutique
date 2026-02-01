@@ -18,13 +18,7 @@ function tailorProfile() {
             $.get("{{ route('materials.all') }}", (data) => {
                 this.materials = data || [];
                 this.filteredMaterials = this.materials;
-                let select = $('#material_select');
-                select.empty();
-                select.append('<option value="">{{ trans("messages.choose_material", [], session("locale")) }}</option>');
-                this.materials.forEach(material => {
-                    const categoryLabel = this.getCategoryLabel(material.category);
-                    select.append(`<option value="${material.id}" data-category="${material.category || ''}">${material.material_name}${material.category ? ' (' + categoryLabel + ')' : ''}</option>`);
-                });
+                // No need to populate hidden select anymore - we work directly with materials array
             }).fail(() => {
                 console.error('Error loading materials');
                 this.materials = [];
@@ -48,14 +42,48 @@ function tailorProfile() {
                 this.showMaterialDropdown = true;
             }
         },
+        selectedMaterialData: null,
+        availableQuantity: 0,
         selectMaterial(material) {
-            $('#material_select').val(material.id);
-            this.materialSearch = material.material_name;
+            // Close dropdown first
             this.showMaterialDropdown = false;
-            this.onMaterialSelect();
+            
+            // Set the material directly
+            $('#material_id').val(material.id);
+            this.materialSearch = material.material_name;
+            
+            // Store material data for validation
+            this.selectedMaterialData = material;
+            this.availableQuantity = parseFloat(material.available_quantity || material.meters_per_roll || 0);
+            
+            // Blur the input to remove focus
+            setTimeout(() => {
+                $('#material_search').blur();
+            }, 100);
+            
+            // Update Alpine.js state directly from the material object
+            this.selectedMaterial = true;
+            this.selectedMaterialName = material.material_name || '';
+            this.materialUnit = material.unit || '-';
+            this.materialCategory = material.category || '-';
+            
+            // Set quantity label based on unit
+            if (material.unit === 'roll') {
+                this.quantityLabel = '{{ trans("messages.how_many_rolls", [], session("locale")) }}';
+            } else if (material.unit === 'meter') {
+                this.quantityLabel = '{{ trans("messages.how_many_meters", [], session("locale")) }}';
+            } else if (material.unit === 'piece') {
+                this.quantityLabel = '{{ trans("messages.how_many_pieces", [], session("locale")) }}';
+            } else {
+                this.quantityLabel = '{{ trans("messages.quantity", [], session("locale")) }}';
+            }
+            
+            // Set max attribute on quantity input
+            $('#quantity').attr('max', this.availableQuantity);
         },
         onMaterialSelect() {
-            const materialId = $('#material_select').val();
+            // This method is kept for backward compatibility but may not be needed
+            const materialId = $('#material_id').val();
             if (materialId) {
                 $.get("{{ url('materials') }}/" + materialId, (response) => {
                     if (response.status === 'success') {
@@ -108,24 +136,14 @@ $(document).ready(function() {
         
         // Get values
         let material_id = $('#material_id').val();
-        let material_select = $('#material_select').val(); // Fallback to select value
         let quantity = $('#quantity').val();
-        let abayas_expected = $('#abayas_expected').val();
         let tailor_id = $('input[name="tailor_id"]').val();
 
         console.log('Form values:', {
             material_id: material_id,
-            material_select: material_select,
             quantity: quantity,
-            abayas_expected: abayas_expected,
             tailor_id: tailor_id
         });
-
-        // Use material_select if material_id is empty (fallback)
-        if (!material_id && material_select) {
-            material_id = material_select;
-            $('#material_id').val(material_select);
-        }
 
         // Validation
         if (!material_id) {
@@ -142,7 +160,7 @@ $(document).ready(function() {
             return false;
         }
 
-        if (!quantity || quantity <= 0) {
+        if (!quantity || quantity <= 0 || isNaN(quantity) || quantity < 0) {
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
                     icon: 'warning',
@@ -156,18 +174,27 @@ $(document).ready(function() {
             return false;
         }
 
-        if (!abayas_expected || abayas_expected < 1) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'warning',
-                    title: '{{ trans("messages.warning", [], session("locale")) }}',
-                    text: '{{ trans("messages.please_enter_abayas_expected", [], session("locale")) }}',
-                    confirmButtonText: '{{ trans("messages.ok", [], session("locale")) }}'
-                });
-            } else {
-                show_notification('error', '{{ trans("messages.please_enter_abayas_expected", [], session("locale")) }}');
+        // Validate quantity doesn't exceed available
+        const component = Alpine.$data(document.querySelector('[x-data="tailorProfile()"]'));
+        if (component && component.selectedMaterialData) {
+            const availableQty = parseFloat(component.availableQuantity || 0);
+            const requestedQty = parseFloat(quantity);
+            
+            if (requestedQty > availableQty) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '{{ trans("messages.error", [], session("locale")) }}',
+                        text: '{{ trans("messages.insufficient_material_quantity", [], session("locale")) ?: "Insufficient material quantity" }}. ' +
+                              '{{ trans("messages.available", [], session("locale")) ?: "Available" }}: ' + availableQty.toFixed(2) + 
+                              ', {{ trans("messages.requested", [], session("locale")) ?: "Requested" }}: ' + requestedQty.toFixed(2),
+                        confirmButtonText: '{{ trans("messages.ok", [], session("locale")) }}'
+                    });
+                } else {
+                    show_notification('error', '{{ trans("messages.insufficient_material_quantity", [], session("locale")) ?: "Insufficient material quantity" }}');
+                }
+                return false;
             }
-            return false;
         }
 
         // Prepare form data
@@ -175,7 +202,6 @@ $(document).ready(function() {
             tailor_id: tailor_id,
             material_id: material_id,
             quantity: parseFloat(quantity),
-            abayas_expected: parseInt(abayas_expected),
             _token: '{{ csrf_token() }}'
         };
 
@@ -216,7 +242,7 @@ $(document).ready(function() {
                             // Reset form
                             $('#send_material_form')[0].reset();
                             $('#material_id').val('');
-                            $('#material_select').val('');
+                            $('#abaya_id').val('');
                             
                             // Reset Alpine.js state
                             const component = Alpine.$data(document.querySelector('[x-data="tailorProfile()"]'));
@@ -237,7 +263,6 @@ $(document).ready(function() {
                         show_notification('success', response.message || '{{ trans("messages.material_sent_successfully", [], session("locale")) }}');
                         $('#send_material_form')[0].reset();
                         $('#material_id').val('');
-                        $('#material_select').val('');
                         setTimeout(() => {
                             window.location.reload();
                         }, 1500);

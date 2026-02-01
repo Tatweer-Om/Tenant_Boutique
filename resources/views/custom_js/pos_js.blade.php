@@ -85,6 +85,10 @@
         let accountsList = [];
         let selectedPayMethod = null; // account id or 'partial'
 
+        // API delivery fee for delivery orders (city fee always 0)
+        let apiDeliveryFee = 0;
+        let customerInputShippingTimeout = null;
+
         /* ===============================
            HELPERS
         ================================ */
@@ -383,29 +387,15 @@
         }
 
         function getDeliveryCharge() {
-          // Check if order type is delivery
           const orderType = selectedOrderType || 'direct';
           if (orderType !== 'delivery') return 0;
-          
-          // Get delivery charge from selected wilayah
-          const wilayahSelect = document.getElementById('deliveryWilayah');
-          const deliveryPaidCheckbox = document.getElementById('deliveryPaid');
           const deliverySection = document.getElementById('deliverySection');
-          
-          // If delivery section is hidden, no delivery charge
           if (!deliverySection || deliverySection.classList.contains('hidden')) return 0;
-          
+          const wilayahSelect = document.getElementById('deliveryWilayah');
           if (!wilayahSelect || !wilayahSelect.value) return 0;
-          
-          const selectedOption = wilayahSelect.options[wilayahSelect.selectedIndex];
-          const charge = parseFloat(selectedOption.dataset.charge || 0);
-          
-          // If delivery is NOT paid (checkbox not checked), add to total
-          if (!deliveryPaidCheckbox || !deliveryPaidCheckbox.checked) {
-            return charge;
-          }
-          
-          return 0; // If paid, don't add to total
+          const deliveryPaidCheckbox = document.getElementById('deliveryPaid');
+          if (deliveryPaidCheckbox && deliveryPaidCheckbox.checked) return 0;
+          return apiDeliveryFee;
         }
 
         function recalculateTotals() {
@@ -698,6 +688,7 @@
           // Initialize delivery charge listeners if delivery section is visible
           if (selectedOrderType === 'delivery') {
             initDeliveryChargeListeners();
+            fetchAndSetApiDeliveryFee();
           }
         }
 
@@ -720,23 +711,22 @@
             }
           }
 
-          // Update delivery charge display (show raw charge, not the one added to total)
+          // Delivery display: use API fee (city fee always 0)
           const deliveryPriceEl = document.getElementById("deliveryPrice");
           if (deliveryPriceEl) {
             const orderType = selectedOrderType || 'direct';
-            const wilayahSelect = document.getElementById('deliveryWilayah');
-            let rawCharge = 0;
-            if (orderType === 'delivery' && wilayahSelect && wilayahSelect.value) {
-              const selectedOption = wilayahSelect.options[wilayahSelect.selectedIndex];
-              rawCharge = parseFloat(selectedOption.dataset.charge || 0);
-            }
-            deliveryPriceEl.innerText = rawCharge.toFixed(3) + " " + translations.omr;
+            const val = (orderType === 'delivery') ? deliveryCharge : 0;
+            deliveryPriceEl.innerText = (typeof val === 'number' ? val : 0).toFixed(3) + " " + translations.omr;
           }
 
           // Update payable amount (includes delivery if not paid)
           const paymentTotalEl = document.getElementById("paymentTotal");
           if (paymentTotalEl) {
             paymentTotalEl.innerText = payableAmount.toFixed(3) + " " + translations.omr;
+          }
+          const singleInput = document.getElementById("singlePaymentAmount");
+          if (singleInput && selectedPayMethod && selectedPayMethod !== 'partial') {
+            singleInput.value = payableAmount.toFixed(3);
           }
         }
 
@@ -780,21 +770,19 @@
 
               if (btn.dataset.type === "delivery") {
                 delivery?.classList.remove("hidden");
-                // Initialize delivery charge listeners
                 initDeliveryChargeListeners();
-                // Also ensure area change listener is attached
                 setTimeout(() => {
                   const areaSelect = document.getElementById('deliveryArea');
                   if (areaSelect) {
                     areaSelect.removeEventListener('change', handleAreaChange);
                     areaSelect.addEventListener('change', handleAreaChange);
-                    console.log('Area change listener attached when delivery type selected');
                   }
                 }, 50);
+                fetchAndSetApiDeliveryFee();
               } else {
                 delivery?.classList.add("hidden");
+                apiDeliveryFee = 0;
               }
-              // Recalculate totals when order type changes
               recalculateTotals();
             };
           });
@@ -810,16 +798,21 @@
           const deliveryPaidCheckbox = document.getElementById('deliveryPaid');
           const areaSelect = document.getElementById('deliveryArea');
 
-          // Update delivery charge when wilayah changes
           if (wilayahSelect) {
             wilayahSelect.removeEventListener('change', handleDeliveryChargeChange);
             wilayahSelect.addEventListener('change', handleDeliveryChargeChange);
           }
 
-          // Update total when delivery paid checkbox changes
           if (deliveryPaidCheckbox) {
             deliveryPaidCheckbox.removeEventListener('change', handleDeliveryChargeChange);
             deliveryPaidCheckbox.addEventListener('change', handleDeliveryChargeChange);
+          }
+          const deliveryPaidLabel = document.getElementById('deliveryPaidLabel');
+          if (deliveryPaidLabel) {
+            deliveryPaidLabel.onclick = () => {
+              const cb = document.getElementById('deliveryPaid');
+              if (cb) { cb.checked = !cb.checked; handleDeliveryChargeChange(); }
+            };
           }
 
           // Load cities when area changes
@@ -832,113 +825,162 @@
           }
         }
         
-        // Make handleAreaChange globally accessible
         window.handleAreaChange = handleAreaChange;
 
         function handleDeliveryChargeChange() {
+          fetchAndSetApiDeliveryFee();
+          recalculateTotals();
+        }
+
+        function loadCitiesForArea(areaId) {
+          const wilayahSelect = document.getElementById('deliveryWilayah');
+          if (!wilayahSelect) return Promise.resolve();
+          if (!areaId) {
+            wilayahSelect.innerHTML = '<option value="">{{ trans('messages.select_wilayah', [], session('locale')) }}</option>';
+            apiDeliveryFee = 0;
+            recalculateTotals();
+            return Promise.resolve();
+          }
+          wilayahSelect.disabled = true;
+          wilayahSelect.innerHTML = '<option value="">{{ trans('messages.loading', [], session('locale')) }}...</option>';
+          const baseUrl = '{{ url('pos/cities') }}';
+          const url = `${baseUrl}?area_id=${encodeURIComponent(areaId)}`;
+          return fetch(url, { method: 'GET', headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
+            .then((res) => res.ok ? res.json() : [])
+            .then((cities) => {
+              const locale = '{{ session('locale', 'ar') }}';
+              wilayahSelect.innerHTML = '<option value="">{{ trans('messages.select_wilayah', [], session('locale')) }}</option>';
+              if (Array.isArray(cities) && cities.length) {
+                cities.forEach((city) => {
+                  const option = document.createElement('option');
+                  option.value = city.id;
+                  option.dataset.charge = 0;
+                  const cityName = locale === 'ar' ? (city.city_name_ar || city.city_name_en) : (city.city_name_en || city.city_name_ar);
+                  option.textContent = cityName;
+                  wilayahSelect.appendChild(option);
+                });
+              } else {
+                const noOpt = document.createElement('option');
+                noOpt.value = '';
+                noOpt.textContent = '{{ trans('messages.no_cities_found', [], session('locale')) ?: 'No cities found' }}';
+                wilayahSelect.appendChild(noOpt);
+              }
+              wilayahSelect.disabled = false;
+              recalculateTotals();
+            })
+            .catch(() => {
+              wilayahSelect.innerHTML = '<option value="">{{ trans('messages.error_loading_cities', [], session('locale')) ?: 'Error loading cities' }}</option>';
+              wilayahSelect.disabled = false;
+            });
+        }
+
+        async function fetchAndSetApiDeliveryFee() {
+          const orderType = selectedOrderType || 'direct';
+          if (orderType !== 'delivery' || !cart.length) {
+            apiDeliveryFee = 0;
+            recalculateTotals();
+            return;
+          }
+          const areaSelect = document.getElementById('deliveryArea');
+          const wilayahSelect = document.getElementById('deliveryWilayah');
+          const name = (document.getElementById('customerName')?.value || '').trim();
+          const phone = (document.getElementById('customerPhone')?.value || '').trim();
+          const area = areaSelect?.value || '';
+          const wilayah = wilayahSelect?.value || '';
+          if (!area || !wilayah || (!phone && !name)) {
+            apiDeliveryFee = 0;
+            recalculateTotals();
+            return;
+          }
+          try {
+            const res = await fetch('{{ route('pos.shipping_fee') }}', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+              },
+              credentials: 'same-origin',
+              body: JSON.stringify({
+                items: buildItemsPayload(),
+                customer: {
+                  name,
+                  phone,
+                  address: document.getElementById('deliveryAddress')?.value || '',
+                  area,
+                  wilayah
+                },
+                order_type: orderType
+              })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.success && (data.shipping_fee != null)) {
+              apiDeliveryFee = parseFloat(data.shipping_fee) || 0;
+            } else {
+              apiDeliveryFee = 0;
+            }
+          } catch (e) {
+            apiDeliveryFee = 0;
+          }
           recalculateTotals();
         }
 
         async function handleAreaChange() {
           const areaSelect = document.getElementById('deliveryArea');
           const wilayahSelect = document.getElementById('deliveryWilayah');
-          
-          if (!areaSelect || !wilayahSelect) {
-            console.error('Area or Wilayah select not found');
-            return;
-          }
-          
+          if (!areaSelect || !wilayahSelect) return;
           const areaId = areaSelect.value;
-          if (!areaId) {
-            wilayahSelect.innerHTML = '<option value="">{{ trans('messages.select_wilayah', [], session('locale')) }}</option>';
-            return;
-          }
-
-          // Show loading state
-          wilayahSelect.disabled = true;
-          wilayahSelect.innerHTML = '<option value="">{{ trans('messages.loading', [], session('locale')) }}...</option>';
-
-          try {
-            const baseUrl = '{{ url('pos/cities') }}';
-            const url = `${baseUrl}?area_id=${encodeURIComponent(areaId)}`;
-            console.log('Fetching cities from:', url);
-            const res = await fetch(url, {
-              method: 'GET',
-              headers: {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-              }
-            });
-            
-            if (!res.ok) {
-              throw new Error(`HTTP error! status: ${res.status}`);
-            }
-            
-            const cities = await res.json();
-            console.log('Cities received:', cities);
-            
-            if (!Array.isArray(cities)) {
-              console.error('Invalid response format:', cities);
-              wilayahSelect.innerHTML = '<option value="">{{ trans('messages.select_wilayah', [], session('locale')) }}</option>';
-              wilayahSelect.disabled = false;
-              return;
-            }
-            
-            wilayahSelect.innerHTML = '<option value="">{{ trans('messages.select_wilayah', [], session('locale')) }}</option>';
-            
-            if (cities.length === 0) {
-              const noCitiesOption = document.createElement('option');
-              noCitiesOption.value = '';
-              noCitiesOption.textContent = '{{ trans('messages.no_cities_found', [], session('locale')) ?: 'No cities found' }}';
-              wilayahSelect.appendChild(noCitiesOption);
-            } else {
-            const locale = '{{ session('locale', 'ar') }}';
-            cities.forEach(city => {
-              const option = document.createElement('option');
-              option.value = city.id;
-              option.dataset.charge = city.delivery_charges || 0;
-              const cityName = locale === 'ar' ? (city.city_name_ar || city.city_name_en) : (city.city_name_en || city.city_name_ar);
-              option.textContent = cityName + (city.delivery_charges ? ` - ${parseFloat(city.delivery_charges).toFixed(3)} ${translations.omr}` : '');
-              wilayahSelect.appendChild(option);
-            });
-            }
-            
-            wilayahSelect.disabled = false;
-            
-            // Recalculate totals after cities are loaded (in case a city was previously selected)
-            recalculateTotals();
-          } catch (error) {
-            console.error('Error loading cities:', error);
-            wilayahSelect.innerHTML = '<option value="">{{ trans('messages.error_loading_cities', [], session('locale')) ?: 'Error loading cities' }}</option>';
-            wilayahSelect.disabled = false;
-          }
+          await loadCitiesForArea(areaId);
         }
 
-        /* Partial payment remaining calculation */
+        /* Partial payment: cap each input so sum never exceeds payable; sum must equal payable to confirm */
         function initPartialPaymentInputs() {
           document.querySelectorAll('.partial-amount').forEach((el) => {
-            el.removeEventListener('input', updatePartialRemaining);
-            el.addEventListener('input', updatePartialRemaining);
+            el.removeEventListener('input', handlePartialAmountInput);
+            el.addEventListener('input', handlePartialAmountInput);
           });
         }
 
-        function updatePartialRemaining() {
-          // Use payable amount (after discount) from payment modal
+        function handlePartialAmountInput(e) {
+          const el = e && e.target ? e.target : null;
+          if (!el || !el.classList.contains('partial-amount')) return;
+
           const payableAmount = parseMoneyFromText($("paymentTotal")?.innerText || "0");
-          let totalInputs = 0;
-          document.querySelectorAll('.partial-amount').forEach((el) => {
-            totalInputs += parseFloat(el.value || "0") || 0;
+          let sumOthers = 0;
+          document.querySelectorAll('.partial-amount').forEach((input) => {
+            if (input !== el) {
+              sumOthers += parseFloat(input.value || "0") || 0;
+            }
           });
 
-          const remaining = payableAmount - totalInputs;
-          if ($("partialRemaining")) {
-            $("partialRemaining").innerText = `${Math.max(0, remaining).toFixed(2)} ${translations.omr}`;
+          let val = parseFloat(el.value || "0") || 0;
+          if (val < 0) {
+            el.value = '0';
+            return;
+          }
+          const maxForCurrent = Math.max(0, payableAmount - sumOthers);
+          if (val > maxForCurrent) {
+            el.value = maxForCurrent.toFixed(3);
           }
         }
 
         /* ===============================
            CUSTOMER AUTOCOMPLETE
         ================================ */
+        function maybeFetchShippingFromCustomerInputs() {
+          clearTimeout(customerInputShippingTimeout);
+          customerInputShippingTimeout = setTimeout(() => {
+            const phone = (document.getElementById('customerPhone')?.value || '').trim();
+            const name = (document.getElementById('customerName')?.value || '').trim();
+            if (!phone || !name) return;
+            if (selectedOrderType !== 'delivery' || !cart.length) return;
+            const area = document.getElementById('deliveryArea')?.value || '';
+            const wilayah = document.getElementById('deliveryWilayah')?.value || '';
+            if (!area || !wilayah) return;
+            fetchAndSetApiDeliveryFee();
+          }, 400);
+        }
+
         function initCustomerAutocomplete() {
           const input = $("customerPhone");
           const box = $("customerSuggestions");
@@ -948,6 +990,17 @@
           if (!input || !box) return;
 
           let searchTimeout;
+
+          input.removeEventListener('input', maybeFetchShippingFromCustomerInputs);
+          input.removeEventListener('blur', maybeFetchShippingFromCustomerInputs);
+          input.addEventListener('input', maybeFetchShippingFromCustomerInputs);
+          input.addEventListener('blur', maybeFetchShippingFromCustomerInputs);
+          if (name) {
+            name.removeEventListener('input', maybeFetchShippingFromCustomerInputs);
+            name.removeEventListener('blur', maybeFetchShippingFromCustomerInputs);
+            name.addEventListener('input', maybeFetchShippingFromCustomerInputs);
+            name.addEventListener('blur', maybeFetchShippingFromCustomerInputs);
+          }
 
           input.oninput = () => {
             box.innerHTML = "";
@@ -974,28 +1027,30 @@
                   div.className = "p-3 hover:bg-gray-50 cursor-pointer text-sm";
                   const displayName = c.name || "{{ trans('messages.customer', [], session('locale')) }}";
                   div.innerText = `${displayName} – ${c.phone || ''}`;
-                  div.onclick = () => {
+                  div.onclick = async () => {
                     if (name) name.value = c.name || '';
                     input.value = c.phone || '';
-
-                    // fill area / wilayah if available
                     const areaSelect = document.getElementById('deliveryArea');
                     const wilSelect = document.getElementById('deliveryWilayah');
-                    if (areaSelect && c.governorate) {
-                      areaSelect.value = c.governorate;
-                    }
-                    if (wilSelect && c.area) {
-                      wilSelect.value = c.area;
+                    const addr = document.getElementById('deliveryAddress');
+                    if (addr && c.address) addr.value = c.address || '';
+
+                    if (areaSelect && wilSelect && (c.area_id || c.city_id)) {
+                      const areaId = String(c.area_id || '');
+                      const cityId = c.city_id ? String(c.city_id) : '';
+                      areaSelect.removeEventListener('change', handleAreaChange);
+                      areaSelect.value = areaId;
+                      await loadCitiesForArea(areaId);
+                      if (cityId) wilSelect.value = cityId;
+                      areaSelect.addEventListener('change', handleAreaChange);
+                      fetchAndSetApiDeliveryFee();
+                      recalculateTotals();
                     }
 
                     box.classList.add("hidden");
-
                     if (selected) {
                       selected.classList.remove("hidden");
-                      selected.innerHTML = `
-                <strong>{{ trans('messages.customer', [], session('locale')) }}:</strong> ${displayName}<br/>
-                <span class="text-sm text-gray-500">${c.phone || ''}</span>
-              `;
+                      selected.innerHTML = `<strong>{{ trans('messages.customer', [], session('locale')) }}:</strong> ${displayName}<br/><span class="text-sm text-gray-500">${c.phone || ''}</span>`;
                     }
                   };
                   box.appendChild(div);
@@ -1619,6 +1674,8 @@
       <div class="text-xs font-semibold text-gray-700 truncate max-w-[140px]">${acc.account_name || acc.account_no || ('#' + acc.id)}</div>
       <input type="number"
              data-account-id="${acc.id}"
+             min="0"
+             step="0.001"
              class="w-32 h-9 text-xs rounded-lg border px-2 partial-amount"
              placeholder="{{ trans('messages.enter_amount', [], session('locale')) }}">
     `;
@@ -1626,7 +1683,6 @@
           });
 
           initPartialPaymentInputs();
-          updatePartialRemaining();
         }
 
         /* ===============================
@@ -1733,15 +1789,24 @@ return;
 
           if (partialEntries.length > 0) {
             const sum = partialEntries.reduce((s, p) => s + p.amount, 0);
-            if (sum - payableAmount > 0.0001) {
+            const diff = Math.abs(sum - payableAmount);
+            if (diff > 0.001) {
+              const msg = sum > payableAmount
+                ? ("{{ trans('messages.amount_exceeds_remaining', [], session('locale')) ?: 'Amount exceeds payable' }}")
+                : ("{{ trans('messages.partial_sum_must_equal', [], session('locale')) ?: 'Sum of partial payments must equal the payable amount' }} (" + payableAmount.toFixed(3) + " {{ trans('messages.omr', [], session('locale')) }}).");
               Swal.fire({
                 icon: 'error',
                 title: "{{ trans('messages.payment_method', [], session('locale')) }}",
-                text: "{{ trans('messages.amount_exceeds_remaining', [], session('locale')) ?: 'Amount exceeds payable' }}"
+                text: msg
               });
               return [];
             }
             return partialEntries;
+          }
+
+          // Partial selected but no amounts entered
+          if (selectedPayMethod === 'partial') {
+            return [];
           }
 
           // Fallback to single payment
@@ -1749,14 +1814,14 @@ return;
             let amount = payableAmount;
             const single = document.getElementById('singlePaymentAmount');
             if (single && single.value) {
-              amount = parseFloat(single.value) || payableAmount;
+              amount = parseFloat(single.value) || 0;
             }
-            if (amount - payableAmount > 0.0001) {
-              Swal.fire({
-                icon: 'error',
-                title: "{{ trans('messages.payment_method', [], session('locale')) }}",
-                text: "{{ trans('messages.amount_exceeds_remaining', [], session('locale')) ?: 'Amount exceeds payable' }}"
-              });
+            const diff = Math.abs(amount - payableAmount);
+            if (diff > 0.001) {
+              const msg = amount < payableAmount
+                ? ("{{ trans('messages.partial_sum_must_equal', [], session('locale')) ?: 'Sum must equal payable' }} " + payableAmount.toFixed(3) + " {{ trans('messages.omr', [], session('locale')) }}")
+                : "{{ trans('messages.amount_exceeds_remaining', [], session('locale')) ?: 'Amount exceeds payable' }}";
+              Swal.fire({ icon: 'error', title: "{{ trans('messages.payment_method', [], session('locale')) }}", text: msg });
               return [];
             }
             
@@ -1824,44 +1889,57 @@ return;
               return;
             }
 
-            const subtotal = getCartSubtotal();
-            const discountAmount = getDiscountAmount(subtotal);
-            
-            // Get delivery charge using the helper function (which checks if paid)
-            const deliveryCharge = getDeliveryCharge();
+            const orderType = selectedOrderType || 'direct';
             const wilayahSelect = document.getElementById('deliveryWilayah');
             const deliveryPaidCheckbox = document.getElementById('deliveryPaid');
-            const orderType = selectedOrderType || 'direct';
-            
-            // Get raw delivery charge (before checking if paid) for saving to DB
+            const customerPayload = {
+              name: document.getElementById('customerName')?.value?.trim() || '',
+              phone: document.getElementById('customerPhone')?.value?.trim() || '',
+              address: document.getElementById('deliveryAddress')?.value || '',
+              area: document.getElementById('deliveryArea')?.value || '',
+              wilayah: wilayahSelect ? wilayahSelect.value || '' : ''
+            };
+
             let rawDeliveryCharge = 0;
             let deliveryPaid = false;
-            
-            if (orderType === 'delivery' && wilayahSelect && wilayahSelect.value) {
-              const selectedOption = wilayahSelect.options[wilayahSelect.selectedIndex];
-              rawDeliveryCharge = parseFloat(selectedOption.dataset.charge || 0);
-              deliveryPaid = deliveryPaidCheckbox ? deliveryPaidCheckbox.checked : false;
-            }
-            
-            // Total includes delivery charge only if not paid (getDeliveryCharge already handles this)
-            const total = subtotal - discountAmount + deliveryCharge;
 
-            // Use the final payable amount from payment modal (which already includes delivery if not paid)
+            if (orderType === 'delivery') {
+              if (!customerPayload.area || !customerPayload.wilayah) {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Select area and city for delivery' });
+                setConfirmButtonLoading(false);
+                return;
+              }
+              if (!customerPayload.phone && !customerPayload.name) {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Customer phone or name is required for delivery' });
+                setConfirmButtonLoading(false);
+                return;
+              }
+              if (apiDeliveryFee === 0) {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Delivery fee not loaded. Select area and city, then wait for the fee to update.' });
+                setConfirmButtonLoading(false);
+                return;
+              }
+              rawDeliveryCharge = apiDeliveryFee;
+              deliveryPaid = !!(deliveryPaidCheckbox && deliveryPaidCheckbox.checked);
+            }
+
+            const subtotal = getCartSubtotal();
+            const discountAmount = getDiscountAmount(subtotal);
+            const deliveryCharge = getDeliveryCharge();
             const finalPayable = parseMoneyFromText($("paymentTotal")?.innerText || "0");
             const payments = buildPaymentsPayload(finalPayable);
             if (!payments.length) {
-              Swal.fire({ icon: 'error', title: "{{ trans('messages.select', [], session('locale')) }}", text: "{{ trans('messages.payment_method', [], session('locale')) }}" });
+              const isPartial = (selectedPayMethod === 'partial');
+              const errTitle = isPartial
+                ? "{{ trans('messages.payment_method', [], session('locale')) }}"
+                : "{{ trans('messages.select', [], session('locale')) }}";
+              const errText = isPartial
+                ? "{{ trans('messages.enter_amount_equal_to_payable', [], session('locale')) ?: 'Enter the amount equal to payable amount' }}"
+                : "{{ trans('messages.payment_method', [], session('locale')) }}";
+              Swal.fire({ icon: 'error', title: errTitle, text: errText });
               setConfirmButtonLoading(false);
               return;
             }
-
-            const customerPayload = {
-              name: document.getElementById('customerName')?.value || '',
-              phone: document.getElementById('customerPhone')?.value || '',
-              address: document.getElementById('deliveryAddress')?.value || '',
-              area: document.getElementById('deliveryArea')?.value || '',
-              wilayah: document.getElementById('deliveryWilayah')?.value || ''
-            };
 
             const payload = {
               items: buildItemsPayload(),
@@ -1869,8 +1947,9 @@ return;
               totals: {
                 subtotal,
                 discount: discountAmount,
-                total: finalPayable, // Use final payable which includes delivery if not paid
-                delivery_charges: rawDeliveryCharge, // Raw delivery charge for DB
+                total: finalPayable,
+                delivery_charges: rawDeliveryCharge,
+                delivery_fee: rawDeliveryCharge,
                 delivery_paid: deliveryPaid
               },
               discount: {
@@ -1901,6 +1980,12 @@ return;
             const data = await res.json();
             if (data.success) {
               // Show success message
+              cart = [];
+              renderCart();
+              recalculateTotals();
+              closePaymentModal();
+              setConfirmButtonLoading(false);
+
               Swal.fire({ 
                 icon: 'success', 
                 title: "{{ trans('messages.confirm_payment', [], session('locale')) }}",
@@ -1909,18 +1994,10 @@ return;
                 cancelButtonText: "{{ trans('messages.close', [], session('locale')) }}"
               }).then((result) => {
                 if (result.isConfirmed && data.order_id) {
-                  // Open pos_bill in new window for printing
                   window.open(`{{ url('pos_bill') }}?order_id=${data.order_id}`, '_blank');
                 }
+                location.reload();
               });
-              
-              cart = [];
-              renderCart();
-              recalculateTotals();
-              closePaymentModal();
-              
-              // Re-enable button after successful completion
-              setConfirmButtonLoading(false);
             } else {
               Swal.fire({ icon: 'error', title: data.message || 'Error saving order' });
               setConfirmButtonLoading(false);

@@ -12,6 +12,7 @@ class TailorMaterial extends Model
     protected $fillable = [
         'tailor_id',
         'material_id',
+        'abaya_id',
         'quantity',
         'abayas_expected',
         'status',
@@ -42,6 +43,14 @@ class TailorMaterial extends Model
     public function material(): BelongsTo
     {
         return $this->belongsTo(Material::class);
+    }
+
+    /**
+     * Get the abaya/stock associated with this material
+     */
+    public function abaya(): BelongsTo
+    {
+        return $this->belongsTo(Stock::class, 'abaya_id');
     }
 }
 

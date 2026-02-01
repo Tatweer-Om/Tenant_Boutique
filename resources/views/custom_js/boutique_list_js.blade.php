@@ -229,20 +229,21 @@ function loadBoutiqueInvoices(boutiqueId) {
                 $('#rent_invoice_monthly_rent').text(data.boutique.monthly_rent || '0');
                 
                 let tableBody = '';
-                data.invoices.forEach(function(invoice) {
+                (data.invoices || []).forEach(function(invoice) {
+                    const isPaid = (String(invoice.status) === '4' || Number(invoice.status) === 4);
                     let statusBadge = invoice.status == '4' 
                         ? '<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700"><span class="material-symbols-outlined text-xs">check_circle</span> <?= trans("messages.paid", [], session("locale")) ?></span>'
                         : '<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700"><span class="material-symbols-outlined text-xs">cancel</span> <?= trans("messages.unpaid", [], session("locale")) ?></span>';
                     
                     let amountInput = `<input type="number" step="0.01" min="0" class="invoice-amount w-24 h-9 border border-pink-200 rounded-lg text-center text-sm" 
                         data-invoice-id="${invoice.id}" value="${invoice.total_amount || ''}" 
-                        ${invoice.status == '4' ? '' : ''}>`;
+                        ${isPaid ? 'disabled' : ''}>`;
                     
                     let paymentDateInput = `<input type="date" class="invoice-payment-date w-36 h-9 border border-pink-200 rounded-lg text-center text-sm" 
-                        data-invoice-id="${invoice.id}" value="${invoice.payment_date || ''}">`;
+                        data-invoice-id="${invoice.id}" value="${invoice.payment_date || ''}" ${isPaid ? 'disabled' : ''}>`;
                     
                     tableBody += `
-                        <tr class="border-t hover:bg-pink-50/30">
+                        <tr class="border-t hover:bg-pink-50/30" data-status="${invoice.status}">
                             <td class="px-4 py-3 text-right font-semibold">${invoice.month}</td>
                             <td class="px-4 py-3 text-center">${statusBadge}</td>
                             <td class="px-4 py-3 text-right">${amountInput}</td>
@@ -274,6 +275,10 @@ $(document).on('click', '#save_invoice_payments_btn', function() {
     // Collect all unpaid invoices with updated data
     $('#rent_invoice_table_body tr').each(function() {
         let $row = $(this);
+        let rowStatus = String($row.data('status') ?? '');
+        if (rowStatus === '4') {
+            return; // skip paid invoices
+        }
         let amountInput = $row.find('.invoice-amount');
         let paymentDateInput = $row.find('.invoice-payment-date');
         
