@@ -117,6 +117,9 @@ class UserController extends Controller
     // Login user
     auth()->login($user);
 
+    // Set default locale to English (en) and direction to LTR after login
+    session(['locale' => 'en']);
+
     return response()->json([
         'status'  => 'success',
         'message' => 'تم تسجيل الدخول بنجاح',

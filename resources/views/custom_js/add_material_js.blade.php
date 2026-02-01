@@ -1,5 +1,13 @@
 <script>
 $(document).ready(function() {
+    // Prevent negative values in purchase price input
+    $('#purchase_price').on('input blur', function() {
+        const value = parseFloat($(this).val());
+        if (value < 0 || isNaN(value)) {
+            $(this).val(0);
+        }
+    });
+
     // Image preview functionality
     $('#material_image').on('change', function(e) {
         const file = e.target.files[0];

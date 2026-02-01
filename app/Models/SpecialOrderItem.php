@@ -22,6 +22,7 @@ class SpecialOrderItem extends Model
         'tailor_id',
         'tailor_status',
         'sent_to_tailor_at',
+        'tailor_order_no',
         'received_from_tailor_at',
         'maintenance_status',
         'maintenance_tailor_id',
@@ -35,6 +36,8 @@ class SpecialOrderItem extends Model
         'maintenance_notes',
         'is_late_delivery',
         'marked_late_at',
+        'color_id',
+        'size_id',
     ];
 
     protected $casts = [

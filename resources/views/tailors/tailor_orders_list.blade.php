@@ -16,27 +16,54 @@
 
         <!-- Tailor Selection and Actions -->
         <div class="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-[var(--border-color)]">
-            <div class="flex flex-col md:flex-row gap-4 items-end">
-                <div class="flex-1">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                        {{ trans('messages.select_tailor', [], session('locale')) }}
-                    </label>
-                    <select id="tailorSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--primary-color)] focus:border-transparent">
-                        <option value="">{{ trans('messages.select_tailor', [], session('locale')) }}</option>
-                        @foreach($tailors as $tailor)
-                            <option value="{{ $tailor->id }}">{{ $tailor->tailor_name }}</option>
-                        @endforeach
-                    </select>
+            <div class="flex flex-col gap-4">
+                <!-- Date Filters -->
+                <div class="flex flex-col md:flex-row gap-4">
+                    <div class="flex-1">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            @if(session('locale') == 'ar')
+                                تاريخ البداية
+                            @else
+                                Start Date
+                            @endif
+                        </label>
+                        <input type="date" id="startDate" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--primary-color)] focus:border-transparent">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            @if(session('locale') == 'ar')
+                                تاريخ النهاية
+                            @else
+                                End Date
+                            @endif
+                        </label>
+                        <input type="date" id="endDate" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--primary-color)] focus:border-transparent">
+                    </div>
                 </div>
-                <div class="flex gap-3">
-                    <button id="exportPdfBtn" disabled class="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
-                        <span class="material-symbols-outlined">picture_as_pdf</span>
-                        {{ trans('messages.export_pdf', [], session('locale')) }}
-                    </button>
-                    <button id="exportExcelBtn" disabled class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
-                        <span class="material-symbols-outlined">file_download</span>
-                        {{ trans('messages.export_excel', [], session('locale')) }}
-                    </button>
+                
+                <!-- Tailor Selection and Export Buttons -->
+                <div class="flex flex-col md:flex-row gap-4 items-end">
+                    <div class="flex-1">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            {{ trans('messages.select_tailor', [], session('locale')) }}
+                        </label>
+                        <select id="tailorSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--primary-color)] focus:border-transparent">
+                            <option value="">{{ trans('messages.select_tailor', [], session('locale')) }}</option>
+                            @foreach($tailors as $tailor)
+                                <option value="{{ $tailor->id }}">{{ $tailor->tailor_name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="flex gap-3">
+                        <button id="exportPdfBtn" disabled class="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                            <span class="material-symbols-outlined">picture_as_pdf</span>
+                            {{ trans('messages.export_pdf', [], session('locale')) }}
+                        </button>
+                        <button id="exportExcelBtn" disabled class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                            <span class="material-symbols-outlined">file_download</span>
+                            {{ trans('messages.export_excel', [], session('locale')) }}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -48,22 +75,17 @@
                     <thead class="bg-gray-50 border-b border-[var(--border-color)]">
                         <tr>
                             <th class="px-4 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap">{{ trans('messages.order_number', [], session('locale')) }}</th>
-                            <th class="px-4 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap">{{ trans('messages.dress_name', [], session('locale')) }}</th>
-                            <th class="px-4 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap">{{ trans('messages.dress_code', [], session('locale')) }}</th>
-                            <th class="px-4 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap">{{ trans('messages.size', [], session('locale')) }}</th>
                             <th class="px-4 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap text-center">{{ trans('messages.quantity', [], session('locale')) }}</th>
-                            <th class="px-4 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap text-center">{{ trans('messages.buttons', [], session('locale')) }}</th>
-                            <th class="px-4 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap">{{ trans('messages.gift', [], session('locale')) }}</th>
-                            <th class="px-4 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap min-w-[200px]">{{ trans('messages.notes', [], session('locale')) }}</th>
                             <th class="px-4 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap">{{ trans('messages.customer_name', [], session('locale')) }}</th>
                             <th class="px-4 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap">{{ trans('messages.phone', [], session('locale')) }}</th>
                             <th class="px-4 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap min-w-[200px]">{{ trans('messages.address', [], session('locale')) }}</th>
                             <th class="px-4 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap">{{ trans('messages.country', [], session('locale')) }}</th>
+                            <th class="px-4 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap">@if(session('locale') == 'ar') تاريخ الإرسال @else Sent Date @endif</th>
                         </tr>
                     </thead>
                     <tbody id="ordersTableBody">
                         <tr>
-                            <td colspan="12" class="px-4 py-8 text-center text-gray-500">
+                            <td colspan="7" class="px-4 py-8 text-center text-gray-500">
                                 {{ trans('messages.select_tailor_to_view_orders', [], session('locale')) }}
                             </td>
                         </tr>

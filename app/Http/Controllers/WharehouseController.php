@@ -17,10 +17,19 @@ use App\Models\ColorSize;
 use App\Models\StockSize;
 use App\Models\StockColor;
 use App\Models\Settlement;
+use App\Models\Customer;
+use App\Models\SpecialOrder;
+use App\Models\SpecialOrderItem;
+use App\Models\PosOrders;
+use App\Models\PosOrdersDetail;
+use App\Models\PosPayment;
+use App\Models\StockAuditLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;   // 👈 add this
+
 
 class WharehouseController extends Controller
 {
@@ -246,29 +255,138 @@ public function manage_quantity()
 public function get_inventory(Request $request)
 {
     $locale = session('locale');
+    $full = $request->boolean('full');
+    $perPage = (int) $request->input('per_page', 70);
+    $perPage = min(100, max(1, $perPage));
+    $page = max(1, (int) $request->input('page', 1));
+
+    // Full list (e.g. for warehouseInventory when transferring from channel to main) - keep existing behavior
+    if ($full) {
+        $inventory = $this->buildFullInventory($locale);
+        return response()->json($inventory);
+    }
+
+    // DB-level pagination: union of size/color/color_size rows, then limit/offset
+    $unionSql = "
+        ( SELECT s.id as stock_id, s.abaya_code, s.design_name, s.barcode, 'size' as mode,
+          sz.size_name_ar, sz.size_name_en, NULL as color_name_ar, NULL as color_name_en, NULL as color_code,
+          ss.qty, NULL as color_id, ss.size_id
+          FROM stocks s
+          INNER JOIN stock_sizes ss ON ss.stock_id = s.id AND ss.qty > 0
+          INNER JOIN sizes sz ON sz.id = ss.size_id
+          WHERE s.mode = 'size' )
+        UNION ALL
+        ( SELECT s.id, s.abaya_code, s.design_name, s.barcode, 'color',
+          NULL, NULL, c.color_name_ar, c.color_name_en, COALESCE(c.color_code,'#000000'),
+          sc.qty, sc.color_id, NULL
+          FROM stocks s
+          INNER JOIN stock_colors sc ON sc.stock_id = s.id AND sc.qty > 0
+          INNER JOIN colors c ON c.id = sc.color_id
+          WHERE s.mode = 'color' )
+        UNION ALL
+        ( SELECT s.id, s.abaya_code, s.design_name, s.barcode, 'color_size',
+          sz.size_name_ar, sz.size_name_en, c.color_name_ar, c.color_name_en, COALESCE(c.color_code,'#000000'),
+          cs.qty, cs.color_id, cs.size_id
+          FROM stocks s
+          INNER JOIN color_sizes cs ON cs.stock_id = s.id AND cs.qty > 0
+          INNER JOIN sizes sz ON sz.id = cs.size_id
+          INNER JOIN colors c ON c.id = cs.color_id
+          WHERE s.mode = 'color_size' )
+    ";
+    $countResult = DB::selectOne("SELECT COUNT(*) as total FROM ({$unionSql}) as u");
+    $total = (int) ($countResult->total ?? 0);
+    $lastPage = $total > 0 ? (int) ceil($total / $perPage) : 1;
+    $offset = ($page - 1) * $perPage;
+
+    $rows = DB::select(
+        "SELECT * FROM ({$unionSql}) as u ORDER BY abaya_code, mode, size_name_en, color_name_en LIMIT " . (int) $perPage . " OFFSET " . (int) $offset
+    );
+
     $inventory = [];
-    
-    // Get all stocks with their relationships
+    foreach ($rows as $row) {
+        $code = $row->abaya_code;
+        $name = $row->design_name;
+        $mode = $row->mode;
+        $sizeName = $locale == 'ar' ? $row->size_name_ar : $row->size_name_en;
+        $colorName = $locale == 'ar' ? $row->color_name_ar : $row->color_name_en;
+        $colorCode = $row->color_code ?? '#000000';
+        if ($mode === 'size') {
+            $uid = $code . '|' . ($sizeName ?: '') . '|';
+            $inventory[] = [
+                'uid' => $uid,
+                'code' => $code,
+                'name' => $name,
+                'type' => 'size',
+                'size' => $sizeName,
+                'color' => null,
+                'color_code' => '#000000',
+                'available' => (int) $row->qty,
+                'webiste_available' => 0
+            ];
+        } elseif ($mode === 'color') {
+            $uid = $code . '||' . ($colorName ?: '');
+            $inventory[] = [
+                'uid' => $uid,
+                'code' => $code,
+                'name' => $name,
+                'type' => 'color',
+                'size' => null,
+                'color' => $colorName,
+                'color_code' => $colorCode,
+                'available' => (int) $row->qty,
+                'webiste_available' => 0
+            ];
+        } else {
+            $uid = $code . '|' . ($sizeName ?: '') . '|' . ($colorName ?: '');
+            $webisteQty = 0;
+            if ($row->stock_id && $row->color_id && $row->size_id) {
+                $barcode = DB::table('stocks')->where('id', $row->stock_id)->value('barcode');
+                $webisteQty = (int) fetchWebsiteCurrentQty($row->stock_id, $barcode, $row->color_id, $row->size_id);
+            }
+            $inventory[] = [
+                'uid' => $uid,
+                'code' => $code,
+                'name' => $name,
+                'type' => 'color_size',
+                'size' => $sizeName,
+                'color' => $colorName,
+                'color_code' => $colorCode,
+                'available' => (int) $row->qty,
+                'webiste_available' => $webisteQty
+            ];
+        }
+    }
+
+    return response()->json([
+        'data' => $inventory,
+        'total' => $total,
+        'current_page' => $page,
+        'last_page' => $lastPage,
+        'per_page' => $perPage
+    ]);
+}
+
+/**
+ * Build full inventory list (used when full=1 for warehouseInventory).
+ */
+private function buildFullInventory($locale)
+{
+    $inventory = [];
     $stocks = Stock::with(['sizes.size', 'colors.color', 'colorSizes.color', 'colorSizes.size'])
         ->get();
-    
+
     foreach ($stocks as $stock) {
         $code = $stock->abaya_code;
         $name = $stock->design_name;
-        $mode = $stock->mode; // 'size', 'color', or 'color_size'
-        
+        $mode = $stock->mode;
+        $barcode = $stock->barcode;
+
         if ($mode === 'size') {
-            // Get all sizes for this stock
             foreach ($stock->sizes as $stockSize) {
-                // Only include items with quantity > 0
-                if ((int)$stockSize->qty <= 0) {
-                    continue;
-                }
-                
+                if ((int) $stockSize->qty <= 0) continue;
                 $size = $stockSize->size;
                 $sizeName = $size ? ($locale == 'ar' ? $size->size_name_ar : $size->size_name_en) : null;
-                $uid = $code . '|' . ($sizeName ? $sizeName : '') . '|';
-                
+                $uid = $code . '|' . ($sizeName ?: '') . '|';
                 $inventory[] = [
                     'uid' => $uid,
                     'code' => $code,
@@ -277,22 +395,17 @@ public function get_inventory(Request $request)
                     'size' => $sizeName,
                     'color' => null,
                     'color_code' => '#000000',
-                    'available' => (int)$stockSize->qty
+                    'available' => (int) $stockSize->qty,
+                    'webiste_available' => 0
                 ];
             }
         } elseif ($mode === 'color') {
-            // Get all colors for this stock
             foreach ($stock->colors as $stockColor) {
-                // Only include items with quantity > 0
-                if ((int)$stockColor->qty <= 0) {
-                    continue;
-                }
-                
+                if ((int) $stockColor->qty <= 0) continue;
                 $color = $stockColor->color;
                 $colorName = $color ? ($locale == 'ar' ? $color->color_name_ar : $color->color_name_en) : null;
                 $colorCode = $color ? ($color->color_code ?? '#000000') : '#000000';
-                $uid = $code . '||' . ($colorName ? $colorName : '');
-                
+                $uid = $code . '||' . ($colorName ?: '');
                 $inventory[] = [
                     'uid' => $uid,
                     'code' => $code,
@@ -301,24 +414,20 @@ public function get_inventory(Request $request)
                     'size' => null,
                     'color' => $colorName,
                     'color_code' => $colorCode,
-                    'available' => (int)$stockColor->qty
+                    'available' => (int) $stockColor->qty,
+                    'webiste_available' => 0
                 ];
             }
         } elseif ($mode === 'color_size') {
-            // Get all color+size combinations for this stock
             foreach ($stock->colorSizes as $colorSize) {
-                // Only include items with quantity > 0
-                if ((int)$colorSize->qty <= 0) {
-                    continue;
-                }
-                
+                if ((int) $colorSize->qty <= 0) continue;
+                $result = fetchWebsiteCurrentQty($colorSize->stock_id, $barcode, $colorSize->color_id, $colorSize->size_id);
                 $color = $colorSize->color;
                 $size = $colorSize->size;
                 $colorName = $color ? ($locale == 'ar' ? $color->color_name_ar : $color->color_name_en) : null;
                 $colorCode = $color ? ($color->color_code ?? '#000000') : '#000000';
                 $sizeName = $size ? ($locale == 'ar' ? $size->size_name_ar : $size->size_name_en) : null;
-                $uid = $code . '|' . ($sizeName ? $sizeName : '') . '|' . ($colorName ? $colorName : '');
-                
+                $uid = $code . '|' . ($sizeName ?: '') . '|' . ($colorName ?: '');
                 $inventory[] = [
                     'uid' => $uid,
                     'code' => $code,
@@ -327,13 +436,13 @@ public function get_inventory(Request $request)
                     'size' => $sizeName,
                     'color' => $colorName,
                     'color_code' => $colorCode,
-                    'available' => (int)$colorSize->qty
+                    'available' => (int) $colorSize->qty,
+                    'webiste_available' => (int) $result
                 ];
             }
         }
     }
-    
-    return response()->json($inventory);
+    return $inventory;
 }
 
 /**
@@ -349,8 +458,17 @@ public function get_channel_inventory(Request $request)
     }
 
     // Parse channel ID
+    $parts = explode('-', $channelId);
+    if (count($parts) < 2) {
+        return response()->json([]);
+    }
+    
     $channelType = strpos($channelId, 'boutique-') === 0 ? 'boutique' : 'channel';
-    $locationId = (int)explode('-', $channelId)[1];
+    $locationId = (int)$parts[1];
+    
+    if ($locationId <= 0) {
+        return response()->json([]);
+    }
 
     // Get stocks from channel_stocks table
     $channelStocks = ChannelStock::where('location_type', $channelType)
@@ -367,6 +485,8 @@ public function get_channel_inventory(Request $request)
         if (!$stock) continue;
 
         $code = $channelStock->abaya_code;
+        if (!$code) continue; // Skip if no code
+        
         $name = $stock->design_name ?? '';
         $itemType = $channelStock->item_type ?? 'color_size';
         
@@ -549,10 +669,76 @@ public function execute_transfer(Request $request)
 
             // Update main warehouse quantities (if transferring from/to main)
             if ($fromChannel === 'main') {
+                // Get current quantity before decrease
+                $currentQty = 0;
+                if ($itemType === 'color_size' && $colorId && $sizeId) {
+                    $colorSize = ColorSize::where('stock_id', $stock->id)
+                        ->where('color_id', $colorId)
+                        ->where('size_id', $sizeId)
+                        ->first();
+                    $currentQty = $colorSize ? (int)$colorSize->qty : 0;
+                }
+                
                 $this->decreaseMainWarehouseStock($stock->id, $itemType, $colorId, $sizeId, (int)$item['qty']);
+                
+                // Log audit entry for transfer out
+                $newQty = max(0, $currentQty - (int)$item['qty']);
+                $toWhom = $toType === 'boutique' ? (Boutique::find($toId)->boutique_name ?? $toChannel) : ($toType === 'channel' ? (Channel::find($toId)->channel_name ?? $toChannel) : $toChannel);
+                
+                StockAuditLog::create([
+                    'stock_id' => $stock->id,
+                    'abaya_code' => $stock->abaya_code,
+                    'barcode' => $stock->barcode,
+                    'design_name' => $stock->design_name,
+                    'operation_type' => 'transferred',
+                    'previous_quantity' => $currentQty,
+                    'new_quantity' => $newQty,
+                    'quantity_change' => -(int)$item['qty'],
+                    'related_id' => $transferCode,
+                    'related_type' => 'transfer',
+                    'related_info' => ['to' => $toWhom, 'from' => 'Main Warehouse'],
+                    'color_id' => $colorId,
+                    'size_id' => $sizeId,
+                    'user_id' => $user_id,
+                    'added_by' => $user_name,
+                    'notes' => 'Transferred out',
+                ]);
             }
             if ($toChannel === 'main') {
+                // Get current quantity before increase
+                $currentQty = 0;
+                if ($itemType === 'color_size' && $colorId && $sizeId) {
+                    $colorSize = ColorSize::where('stock_id', $stock->id)
+                        ->where('color_id', $colorId)
+                        ->where('size_id', $sizeId)
+                        ->first();
+                    $currentQty = $colorSize ? (int)$colorSize->qty : 0;
+                }
+                
                 $this->increaseMainWarehouseStock($stock->id, $itemType, $colorId, $sizeId, (int)$item['qty']);
+                
+                // Log audit entry for transfer in
+                $newQty = $currentQty + (int)$item['qty'];
+                $fromWhom = $fromType === 'boutique' ? (Boutique::find($fromId)->boutique_name ?? $fromChannel) : ($fromType === 'channel' ? (Channel::find($fromId)->channel_name ?? $fromChannel) : $fromChannel);
+                
+                StockAuditLog::create([
+                    'stock_id' => $stock->id,
+                    'abaya_code' => $stock->abaya_code,
+                    'barcode' => $stock->barcode,
+                    'design_name' => $stock->design_name,
+                    'operation_type' => 'transferred',
+                    'previous_quantity' => $currentQty,
+                    'new_quantity' => $newQty,
+                    'quantity_change' => (int)$item['qty'],
+                    'related_id' => $transferCode,
+                    'related_type' => 'transfer',
+                    'related_info' => ['from' => $fromWhom, 'to' => 'Main Warehouse'],
+                    'color_id' => $colorId,
+                    'size_id' => $sizeId,
+                    'user_id' => $user_id,
+                    'added_by' => $user_name,
+                    'notes' => 'Transferred in',
+                ]);
             }
 
             // Create transfer item history
@@ -578,6 +764,19 @@ public function execute_transfer(Request $request)
 
         DB::commit();
 
+        // Sync transfer items to website (only when to_location = channel-1
+        // and related stock.website_data_delivery_status = 1)
+        try {
+            if (function_exists('syncTransferItemsToWebsiteReceiveQty')) {
+                syncTransferItemsToWebsiteReceiveQty($transfer->id, 'channel-1');
+            }
+        } catch (\Throwable $e) {
+            \Log::error('Transfer items website sync failed', [
+                'transfer_id' => $transfer->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         return response()->json([
             'status' => 'success',
             'message' => 'Transfer executed successfully',
@@ -591,6 +790,117 @@ public function execute_transfer(Request $request)
             'message' => 'Error executing transfer: ' . $e->getMessage()
         ], 500);
     }
+}
+
+/**
+ * Manual endpoint to sync transfer items to website API:
+ * - Only items where to_location = channel-1
+ * - Only items whose related stock has website_data_delivery_status = 1
+ *
+ * URL: /sync-transfer-receive-qty/{transferId}
+ */
+public function syncTransferReceiveQty($transferId)
+{
+    if (!Auth::check()) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Please login first',
+        ], 401);
+    }
+
+    $permissions = Auth::user()->permissions ?? [];
+    if (!in_array(6, $permissions)) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Permission denied',
+        ], 403);
+    }
+
+    $transfer = Transfer::find($transferId);
+    if (!$transfer) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Transfer not found',
+        ], 404);
+    }
+
+    if (!function_exists('syncTransferItemsToWebsiteReceiveQty')) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Sync helper not available',
+        ], 500);
+    }
+
+    $summary = syncTransferItemsToWebsiteReceiveQty($transfer->id, 'channel-1');
+
+    return response()->json([
+        'status' => 'success',
+        'transfer_id' => $transfer->id,
+        'transfer_code' => $transfer->transfer_code,
+        'summary' => $summary,
+    ]);
+}
+
+/**
+ * Manual endpoint to sync ALL matching transfer items to website API.
+ * Conditions:
+ * - transfer_items.to_location = channel-1
+ * - related stocks.website_data_delivery_status = 1
+ *
+ * URL: /sync-transfer-receive-qty-bulk?limit=50 (limit optional)
+ */
+public function syncTransferReceiveQtyBulk(Request $request)
+{
+    if (!Auth::check()) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Please login first',
+        ], 401);
+    }
+
+    $permissions = Auth::user()->permissions ?? [];
+    if (!in_array(6, $permissions)) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Permission denied',
+        ], 403);
+    }
+
+    if (!function_exists('syncAllTransferItemsToWebsiteReceiveQty')) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Sync helper not available',
+        ], 500);
+    }
+
+    $limit = (int) $request->query('limit', 0);
+    $summary = syncAllTransferItemsToWebsiteReceiveQty('channel-1', $limit);
+ 
+    // Helpful debug stats so you can see why "picked" is 0
+    $totalTransferItems = TransferItem::count();
+    $totalToChannel1 = TransferItem::whereRaw('TRIM(to_location) = ?', ['channel-1'])->count();
+
+    $hasTransferItemsWebsiteStatus = \Illuminate\Support\Facades\Schema::hasColumn('transfer_items', 'website_data_delivery_status');
+    $totalTransferItemsWebsiteStatus1 = $hasTransferItemsWebsiteStatus
+        ? TransferItem::where('website_data_delivery_status', 1)->count()
+        : null;
+    $totalTransferItemsBoth = $hasTransferItemsWebsiteStatus
+        ? TransferItem::whereRaw('TRIM(to_location) = ?', ['channel-1'])
+            ->where('website_data_delivery_status', 1)
+            ->count()
+        : null;
+
+    return response()->json([
+        'status' => 'success',
+        'stats' => [
+            'total_transfer_items' => $totalTransferItems,
+            'to_location_channel_1' => $totalToChannel1,
+            'transfer_items_has_website_data_delivery_status' => $hasTransferItemsWebsiteStatus,
+            'transfer_items_website_status_1' => $totalTransferItemsWebsiteStatus1,
+            'transfer_items_both_conditions' => $totalTransferItemsBoth,
+        ],
+        'summary' => $summary,
+    ]);
 }
 
 /**
@@ -948,13 +1258,66 @@ public function get_channel_stocks(Request $request)
         ->with('stock')
         ->get();
 
+    // For boutiques, "qty" in ChannelStock can include already-settled quantities.
+    // We also compute an "unsettled_qty" per code/color/size:
+    // unsettled_qty = sum(transfer_items.sellable to boutique) - sum(transfer_items.quantity pulled from boutique)
+    $unsettledMap = [];
+    if ($channelType === 'boutique') {
+        $boutiqueLocation = 'boutique-' . $locationId;
+
+        // Sum sellable sent TO boutique (already reduced by settlement saves)
+        $sent = TransferItem::select(
+                'abaya_code',
+                'color_id',
+                'size_id',
+                'color_name',
+                'size_name',
+                DB::raw('SUM(sellable) as sellable_sum')
+            )
+            ->where('to_location', $boutiqueLocation)
+            ->groupBy('abaya_code', 'color_id', 'size_id', 'color_name', 'size_name')
+            ->get();
+
+        // Sum quantities pulled/transferred FROM boutique
+        $pulled = TransferItem::select(
+                'abaya_code',
+                'color_id',
+                'size_id',
+                'color_name',
+                'size_name',
+                DB::raw('SUM(quantity) as pulled_sum')
+            )
+            ->where('from_location', $boutiqueLocation)
+            ->groupBy('abaya_code', 'color_id', 'size_id', 'color_name', 'size_name')
+            ->get();
+
+        $pulledMap = [];
+        foreach ($pulled as $p) {
+            $k = ($p->abaya_code ?? '') . '|' . ($p->color_id ?? 'null') . '|' . ($p->size_id ?? 'null') . '|' . ($p->color_name ?? '') . '|' . ($p->size_name ?? '');
+            $pulledMap[$k] = (int)($p->pulled_sum ?? 0);
+        }
+
+        foreach ($sent as $s) {
+            $k = ($s->abaya_code ?? '') . '|' . ($s->color_id ?? 'null') . '|' . ($s->size_id ?? 'null') . '|' . ($s->color_name ?? '') . '|' . ($s->size_name ?? '');
+            $sellableSum = (int)($s->sellable_sum ?? 0);
+            $pulledSum = (int)($pulledMap[$k] ?? 0);
+            $unsettledMap[$k] = max(0, $sellableSum - $pulledSum);
+        }
+    }
+
     $result = [];
     foreach ($stocks as $stock) {
+        $key = ($stock->abaya_code ?? '') . '|' . ($stock->color_id ?? 'null') . '|' . ($stock->size_id ?? 'null') . '|' . ($stock->color_name ?? '') . '|' . ($stock->size_name ?? '');
+        $unsettledQty = $channelType === 'boutique'
+            ? (int)($unsettledMap[$key] ?? 0)
+            : (int)($stock->quantity ?? 0);
+
         $result[] = [
             'code' => $stock->abaya_code,
             'color' => $stock->color_name,
             'size' => $stock->size_name,
             'qty' => $stock->quantity,
+            'unsettled_qty' => $unsettledQty,
         ];
     }
 
@@ -1605,13 +1968,14 @@ public function save_settlement(Request $request)
 }
 
 /**
- * Get settlement history
+ * Get settlement history with pagination
  */
 public function get_settlement_history(Request $request)
 {
     $locale = session('locale');
     $search = $request->input('search', '');
     $month = $request->input('month', '');
+    $page = $request->input('page', 1);
 
     $query = Settlement::orderBy('month', 'desc')->orderBy('id', 'desc');
 
@@ -1626,7 +1990,8 @@ public function get_settlement_history(Request $request)
         $query->where('month', $month);
     }
 
-    $settlements = $query->get();
+    // Paginate results - 10 entries per page
+    $settlements = $query->paginate(10, ['*'], 'page', $page);
 
     $history = [];
     foreach ($settlements as $settlement) {
@@ -1645,7 +2010,15 @@ public function get_settlement_history(Request $request)
         ];
     }
 
-    return response()->json($history);
+    return response()->json([
+        'data' => $history,
+        'current_page' => $settlements->currentPage(),
+        'last_page' => $settlements->lastPage(),
+        'total' => $settlements->total(),
+        'per_page' => $settlements->perPage(),
+        'from' => $settlements->firstItem(),
+        'to' => $settlements->lastItem(),
+    ]);
 }
 
 /**
@@ -1786,4 +2159,348 @@ private function updateSellableOnPull($boutiqueLocation, $code, $color, $size, $
     }
 }
 
+
+        public function syncPendingTransferItemsToWebsite()
+    {
+        // Optional: you can pass limit or different target location
+        $targetToLocation = 'channel-1';
+        $limit = 0; // 0 = no limit
+
+        // Call your helper function
+        syncAllTransferItemsToWebsiteReceiveQty($targetToLocation, $limit);
+
+        // For debugging, you can return all items that are still pending
+    
+    }
+    
+// public function receiveWebsiteOrders(Request $request)
+// {
+//     try {
+
+//         // 1️⃣ Get data from query OR body (both supported)
+//         $pos_order_main   = $request->query('pos_order_main') ?? $request->input('pos_order_main');
+//         $pos_order_detail = $request->query('pos_order_detail') ?? $request->input('pos_order_detail');
+
+//         // 2️⃣ Decode JSON if string
+//         $pos_order_main_decoded = is_string($pos_order_main)
+//             ? json_decode($pos_order_main, true)
+//             : $pos_order_main;
+
+//         $pos_order_detail_decoded = is_string($pos_order_detail)
+//             ? json_decode($pos_order_detail, true)
+//             : $pos_order_detail;
+
+//         // 3️⃣ Log EVERYTHING (proof API was hit)
+//         \Log::info('receive_website_orders HIT', [
+//             'pos_order_main'   => $pos_order_main_decoded,
+//             'pos_order_detail' => $pos_order_detail_decoded,
+//             'raw_request'      => $request->all(),
+//             'headers'          => $request->headers->all(),
+//         ]);
+
+//         // 4️⃣ Return full data in response (for testing)
+//         return response()->json([
+//             'status' => 'success',
+//             'message' => 'Orders received successfully',
+//             'pos_order_main' => $pos_order_main_decoded,
+//             'pos_order_detail' => $pos_order_detail_decoded,
+//         ]);
+
+//     } catch (\Throwable $e) {
+
+//         \Log::error('receive_website_orders FAILED', [
+//             'error' => $e->getMessage(),
+//             'line'  => $e->getLine(),
+//         ]);
+
+//         return response()->json([
+//             'status' => 'error',
+//             'message' => $e->getMessage(),
+//         ], 500);
+//     }
+// }
+
+   
+public function receiveWebsiteOrders(Request $request)
+{
+    try {
+        $payload = $request->all();
+
+        if (empty($payload) && $request->getContent()) {
+            $payload = json_decode($request->getContent(), true) ?? [];
+        }
+
+        Log::info('receive_website_orders HIT', [
+            'payload' => $payload,
+            'headers' => $request->headers->all(),
+        ]);
+
+        $posOrderMain   = json_decode($payload['pos_order_main'] ?? '{}', true);
+        $posOrderDetail = json_decode($payload['pos_order_detail'] ?? '[]', true);
+
+        if (empty($posOrderMain) || empty($posOrderDetail)) {
+            throw new \Exception('Order data missing');
+        }
+
+        DB::beginTransaction();
+        
+        
+     
+      
+        /* =========================
+         * 1️⃣ GET OR CREATE CUSTOMER
+         * ========================= */
+        $customerName = trim(
+            $posOrderMain['customer_name'] . ' ' .
+            ($posOrderMain['customer_middle_name'] ?? '') . ' ' .
+            ($posOrderMain['customer_sur_name'] ?? '')
+        );
+
+        $customer = Customer::where('phone', $posOrderMain['customer_contact'])
+            ->first();
+
+        if (!$customer) {
+            $customer = Customer::create([
+                'name'        => $customerName,
+                'phone'       => $posOrderMain['customer_contact'],
+                'email'       => $posOrderMain['customer_email'] ?? null,
+                'governorate' => $posOrderMain['customer_area'] ?? null,
+                'area'        => $posOrderMain['customer_city'] ?? null,
+            ]);
+        }
+
+        /* =========================
+         * 2️⃣ CALCULATE TOTALS
+         * ========================= */
+       
+
+         
+
+        
+        
+        $specialItemDetail = [];
+        $posItemDetail = [];
+        
+        
+        $total_qtys=0;
+        foreach ($posOrderDetail as $item) {
+        
+            // make sure length exists + numeric
+            $length = isset($item['length']) ? (float)$item['length'] : 0;
+            $total_qtys += $item['product_qty']; 
+            if ($length > 0) {
+                $specialItemDetail[] = $item;
+            } else {
+                $posItemDetail[] = $item;
+            }
+        }
+        
+        $per_piece_discount = 0;
+        
+        if($posOrderMain['coupon_discount']>0)
+        {
+            $per_piece_discount = $posOrderMain['coupon_discount']/$total_qtys;
+        }
+        
+        
+
+
+        /* =========================
+         * 3️⃣ CREATE SPECIAL ORDER
+         * ========================= */
+         $shipping_charges_pos=0;
+         $shipping_charges_special=0;
+        if(count($specialItemDetail)>0 && count($posItemDetail)>0)
+        {
+            $shipping_charges_pos =$posOrderMain['shipping_charges'];
+            $shipping_charges_special=0;
+        }
+        elseif(count($specialItemDetail)>0)
+        {
+            $shipping_charges_special=$posOrderMain['shipping_charges'];
+        }
+        elseif(count($posItemDetail)>0)
+        {
+            $shipping_charges_pos=$posOrderMain['shipping_charges'];
+        }
+        
+        
+        $original_price = 0;
+        $paid_amount    = 0;
+        
+        $specialOrder = SpecialOrder::create([
+            'source'           => 'website',
+            'customer_id'      => $customer->id,
+            'special_order_no' => $posOrderMain['order_id'],
+            'send_as_gift'     => $posOrderMain['gift'] ?? 0,
+            'gift_text'        => $posOrderMain['customer_gift'] ?? null,
+            'notes'            => $posOrderMain['status'] ?? null,
+            'shipping_fee'     => $shipping_charges_special ?? 0,
+            'status'           => 'new',
+            
+            'account_id'       => 4,
+            'user_id'       => 1,
+            'added_by'         => 'system',
+            'created_at'       => $posOrderMain['created_at'] ?? now(),
+        ]);
+
+        foreach ($specialItemDetail as $item) {
+            $stock = Stock::find($item['product_id']);
+            $new_price = ($item['product_price']-$per_piece_discount);
+            $itemTotal =  $new_price* $item['product_qty'];
+            $original_price += $itemTotal;
+
+            // FULL PAYMENT
+            if (!empty($posOrderMain['pay_full'])) {
+                $paid_amount += $itemTotal;
+            }
+            // PARTIAL PAYMENT (Special Order)
+            elseif (!empty($posOrderMain['partial_amount_status'])) {
+                $half = $new_price / 2;
+                if($half>10)
+                {
+                    $paid_amount += 10 * $item['product_qty'];
+                }
+                else
+                {
+                    $paid_amount += $half * $item['product_qty'];
+                }
+                
+            }
+            
+            $grand_total = $original_price;
+            $remaining   = $grand_total - $paid_amount;
+
+            SpecialOrderItem::create([
+                'special_order_id' => $specialOrder->id,
+                'stock_id'         => $item['product_id'],
+                'abaya_code'       => $stock->abaya_code ?? null,
+                'design_name'      => $stock->design_name ?? null,
+                'price'            => ($new_price),
+                'quantity'         => $item['product_qty'],
+                'bust'             => $item['bust'] ?? null,
+                'sleeves_length'   => $item['slevees'] ?? null,
+                'abaya_length'     => $item['length'] ?? null,
+                'button'           => (isset($item['button']) && strtolower($item['button']) === 'yes') ? 1 : 0,
+                'notes'            => $item['order_notes'] ?? null,
+            ]);
+        }
+        
+       
+        /* =========================
+         * 4️⃣ CREATE POS ORDER
+         * ========================= */
+        
+
+        /* =========================
+         * 5️⃣ POS ORDER DETAILS
+         * ========================= */
+         $posgrandtotal=0;
+         $total_discount_pos=0;
+         $ship_paid=0;
+         if($posOrderMain['customer_city']==10 || $posOrderMain['customer_city']==11)
+         {
+             $ship_paid=$shipping_charges_pos;
+         }
+         
+         $posOrder = PosOrders::create([
+            'customer_id'      => $customer->id,
+            'order_type'       => 'website',
+            'special_order_id' => $specialOrder->id,
+            'delivery_status'  => $posOrderMain['shipping_status'] ?? null,
+            'delivery_city_id' => $posOrderMain['customer_city'] ?? null,
+            'delivery_area_id' => $posOrderMain['customer_area'] ?? null,
+            'delivery_address' => $posOrderMain['customer_notes'] ?? null,
+            'delivery_fee'     => $shipping_charges_pos ?? 0,
+            'delivery_fee_paid'     => $ship_paid ?? 0,
+            'item_count'       => count($posItemDetail),
+            'paid_amount'      => 0,
+            'total_amount'     => 0,
+            'total_discount'   => 0,
+            'order_no'         => $posOrderMain['order_id'],
+            'notes'            => $posOrderMain['customer_notes'] ?? null,
+            'added_by'         => 'system',
+            'created_at'       => $posOrderMain['created_at'] ?? now(),
+            'raw_payload'      => json_encode($payload),
+        ]);
+         
+        foreach ($posItemDetail as $item) {
+            
+             $new_price = ($item['product_price']-$per_piece_discount);
+            $posgrandtotal += $new_price * $item['product_qty'];
+            $total_discount_pos=($per_piece_discount*$item['product_qty']);
+            
+            PosOrdersDetail::create([
+                'order_id' => $posOrder->id,
+                'order_no' => $posOrderMain['order_id'],
+                'item_id'     => $item['product_id'],
+                'color_id'        => $item['color'],
+                'size_id'     => $item['size'],
+                'item_barcode' => Stock::find($item['product_id'])->barcode ?? null,
+                'item_quantity'        => $item['product_qty'],
+                'item_discount_price'       => ($per_piece_discount*$item['product_qty']) ?? 0,
+                'item_price'       => $item['product_price'],
+                'item_total' => $item['product_price'] * $item['product_qty'],
+                'item_profit' => Stock::where('id', $item['product_id'])->first()->sales_price - $item['product_price'] ?? 0,
+                'notes'        => $item['order_notes'] ?? null,
+                'added_by'   => 'system',
+                'created_at'   => $posOrderMain['created_at'] ?? now(),
+            ]);
+        }
+    
+        $posOrder->paid_amount     = $posgrandtotal ?? 0;
+        $posOrder->total_amount     = $posgrandtotal ?? 0;
+        $posOrder->total_discount     = $total_discount_pos ?? 0;
+        $posOrder->save();
+        
+        $specialOrder->pos_order_id     = $posOrder->id;
+        $specialOrder->total_amount     = $grand_total ?? 0;
+        $specialOrder->paid_amount     = $paid_amount ?? 0;
+        $specialOrder->save();
+       
+
+        /* =========================
+         * 6️⃣ POS PAYMENT
+         * ========================= */
+        PosPayment::create([
+            'order_id'   => $posOrder->id,
+            'order_no' => $posOrderMain['order_id'],
+            'paid_amount'   => $posgrandtotal,
+            'total_amount'  => $posgrandtotal,
+            'discount'=>    $total_discount_pos ?? 0,
+            'account_id'   => 4,
+            'notes'         => $posOrderMain['customer_notes'] ?? null,
+
+            'added_by'       => 'system',
+            'created_at'     => $posOrderMain['created_at'] ?? now(),
+        ]);
+
+        DB::commit();
+
+        return response()->json([
+            'status'       => 'success',
+            'message'      => 'Website order processed successfully',
+            'order_no'     => $posOrder->order_no,
+            'special_id'   => $specialOrder->id,
+            'pos_order_id' => $posOrder->id,
+            'paid_amount'  => $paid_amount,
+            'remaining'    => $remaining,
+        ]);
+
+    } catch (\Throwable $e) {
+        DB::rollBack();
+
+        Log::error('receive_website_orders FAILED', [
+            'error' => $e->getMessage(),
+            'line'  => $e->getLine(),
+            'file'  => $e->getFile(),
+        ]);
+
+        return response()->json([
+            'status'  => 'error',
+            'message' => $e->getMessage(),
+        ], 500);
+    }
+} 
+    
 }

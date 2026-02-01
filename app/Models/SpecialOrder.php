@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class SpecialOrder extends Model
 {
     protected $fillable = [
+        'special_order_no',
+        'pos_order_id',
         'source',
         'customer_id',
         'send_as_gift',

@@ -145,47 +145,28 @@
             <h2 class="text-lg font-bold text-gray-800">{{ trans('messages.qty_price', [], session('locale')) }}</h2>
           </div>
           
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <!-- Buy Price -->
             <label class="flex flex-col">
               <span class="text-sm font-semibold text-gray-700 mb-1.5">{{ trans('messages.buy_price', [], session('locale')) }}</span>
               <input type="number" 
                      step="0.01"
+                     min="0"
                      placeholder="0.00"
                      class="h-11 rounded-lg px-4 border border-gray-300 focus:ring-2 focus:ring-primary/50 focus:border-primary transition" 
                      name="purchase_price" 
                      id="purchase_price" />
             </label>
 
-            <!-- Sell Price -->
+            <!-- Meters/Pieces -->
             <label class="flex flex-col">
-              <span class="text-sm font-semibold text-gray-700 mb-1.5">{{ trans('messages.suggested_sell_price', [], session('locale')) }}</span>
+              <span class="text-sm font-semibold text-gray-700 mb-1.5">{{ trans('messages.total_meters_pieces', [], session('locale')) }}</span>
               <input type="number" 
                      step="0.01"
-                     placeholder="0.00"
-                     class="h-11 rounded-lg px-4 border border-gray-300 focus:ring-2 focus:ring-primary/50 focus:border-primary transition" 
-                     name="sale_price" 
-                     id="sale_price" />
-            </label>
-
-            <!-- Rolls Count -->
-            <label class="flex flex-col">
-              <span class="text-sm font-semibold text-gray-700 mb-1.5">{{ trans('messages.rolls_count', [], session('locale')) }}</span>
-              <input type="number" 
                      placeholder="0"
                      class="h-11 rounded-lg px-4 border border-gray-300 focus:ring-2 focus:ring-primary/50 focus:border-primary transition" 
-                     name="roll_count" 
-                     id="roll_count" />
-            </label>
-
-            <!-- Meters Per Roll -->
-            <label class="flex flex-col">
-              <span class="text-sm font-semibold text-gray-700 mb-1.5">{{ trans('messages.meters_per_roll', [], session('locale')) }}</span>
-              <input type="number" 
-                     placeholder="0"
-                     class="h-11 rounded-lg px-4 border border-gray-300 focus:ring-2 focus:ring-primary/50 focus:border-primary transition" 
-                     name="meter_per_roll" 
-                     id="meter_per_roll" />
+                     name="meters_pieces" 
+                     id="meters_pieces" />
             </label>
           </div>
         </div>

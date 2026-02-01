@@ -8,7 +8,7 @@
 <main class="flex-1 p-4 md:p-6" x-data="maintenanceApp" x-init="init()">
 
   <!-- 📊 Statistics Cards -->
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
     <!-- Delivered to Tailor -->
     <div class="bg-white rounded-2xl shadow-md p-6 border-l-4 border-orange-500">
       <div class="flex items-center justify-between">
@@ -31,6 +31,61 @@
         </div>
         <div class="bg-blue-100 p-4 rounded-full">
           <span class="material-symbols-outlined text-blue-600 text-4xl">inventory_2</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Total Delivered Items -->
+    <div class="bg-white rounded-2xl shadow-md p-6 border-l-4 border-emerald-500">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-gray-500 text-sm mb-1">{{ trans('messages.total_delivered_items', [], session('locale')) ?: 'Total Delivered Items' }}</p>
+          <p class="text-3xl font-bold text-emerald-600" x-text="statistics.delivered_count || 0"></p>
+        </div>
+        <div class="bg-emerald-100 p-4 rounded-full">
+          <span class="material-symbols-outlined text-emerald-600 text-4xl">check_circle</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Total Delivery Charges -->
+    <div class="bg-white rounded-2xl shadow-md p-6 border-l-4 border-purple-500">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-gray-500 text-sm mb-1">{{ trans('messages.total_delivery_charges', [], session('locale')) ?: 'Total Delivery Charges' }}</p>
+          <p class="text-3xl font-bold text-purple-600" x-text="formatCurrency(statistics.total_delivery_charges || 0)"></p>
+          <p class="mt-1 text-xs text-gray-600">
+            {{ trans('messages.customer_bearer', [], session('locale')) ?: 'Customer' }}:
+            <span class="font-semibold" x-text="formatCurrency(statistics.customer_delivery_charges || 0)"></span>
+          </p>
+          <p class="text-xs text-gray-600">
+            {{ trans('messages.company_bearer', [], session('locale')) ?: 'Company' }}:
+            <span class="font-semibold" x-text="formatCurrency(statistics.company_delivery_charges || 0)"></span>
+          </p>
+        </div>
+        <div class="bg-purple-100 p-4 rounded-full">
+          <span class="material-symbols-outlined text-purple-600 text-4xl">local_shipping</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Total Repair Cost -->
+    <div class="bg-white rounded-2xl shadow-md p-6 border-l-4 border-red-500">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-gray-500 text-sm mb-1">{{ trans('messages.total_repair_cost', [], session('locale')) ?: 'Total Repair Cost' }}</p>
+          <p class="text-3xl font-bold text-red-600" x-text="formatCurrency(statistics.total_repair_cost || 0)"></p>
+          <p class="mt-1 text-xs text-gray-600">
+            {{ trans('messages.customer_bearer', [], session('locale')) ?: 'Customer' }}:
+            <span class="font-semibold" x-text="formatCurrency(statistics.customer_repair_cost || 0)"></span>
+          </p>
+          <p class="text-xs text-gray-600">
+            {{ trans('messages.company_bearer', [], session('locale')) ?: 'Company' }}:
+            <span class="font-semibold" x-text="formatCurrency(statistics.company_repair_cost || 0)"></span>
+          </p>
+        </div>
+        <div class="bg-red-100 p-4 rounded-full">
+          <span class="material-symbols-outlined text-red-600 text-4xl">build</span>
         </div>
       </div>
     </div>
@@ -59,7 +114,7 @@
       <h3 class="text-lg font-semibold mb-3">{{ trans('messages.search_delivered_orders', [], session('locale')) ?: 'Search Delivered Orders' }}</h3>
       <div class="relative">
         <input type="text" 
-               placeholder="{{ trans('messages.search_by_customer_order_code_phone', [], session('locale')) ?: 'Search by customer name, order number, abaya code, or phone...' }}"
+               placeholder="{{ trans('messages.search_by_customer_order_phone', [], session('locale')) ?: 'Search by customer name, order number, or phone...' }}"
                x-model="deliveredOrderSearch"
                @input.debounce.500ms="searchDeliveredOrders()"
                class="form-input w-full border-gray-300 rounded-xl px-4 py-2 shadow-sm focus:ring-primary">
@@ -69,7 +124,7 @@
             <div @click="openOrderItemsModal(order)"
                  class="p-3 hover:bg-indigo-50 cursor-pointer border-b border-gray-100 last:border-b-0">
               <p class="font-semibold text-indigo-600" x-text="order.order_no"></p>
-              <p class="text-sm text-gray-600" x-text="order.customer_name + ' - ' + order.customer_phone"></p>
+              <p class="text-sm text-gray-600" x-text="order.customer_phone !== '-' ? (order.customer_name + ' - ' + order.customer_phone) : order.customer_name"></p>
               <p class="text-xs text-gray-500" x-text="order.items_count + ' {{ trans('messages.items', [], session('locale')) }}'"></p>
             </div>
           </template>
@@ -103,81 +158,87 @@
     </div>
 
     <!-- Desktop Table -->
-    <table class="w-full text-sm hidden md:table" x-show="!loading && filteredItems().length > 0">
-      <thead class="bg-gray-100 text-gray-700">
-        <tr>
-          <th class="py-3 px-4 text-left">{{ trans('messages.image', [], session('locale')) }}</th>
-          <th class="py-3 px-4 text-left">{{ trans('messages.design_name', [], session('locale')) }}</th>
-          <th class="py-3 px-4 text-left">{{ trans('messages.code', [], session('locale')) }}</th>
-          <th class="py-3 px-4 text-left">{{ trans('messages.quantity', [], session('locale')) ?: 'Quantity' }}</th>
-          <th class="py-3 px-4 text-left">{{ trans('messages.order_no', [], session('locale')) }}</th>
-          <th class="py-3 px-4 text-left">{{ trans('messages.customer', [], session('locale')) }}</th>
-          <th class="py-3 px-4 text-left">{{ trans('messages.customer_phone', [], session('locale')) }}</th>
-          <th class="py-3 px-4 text-left">{{ trans('messages.status', [], session('locale')) }}</th>
-          <th class="py-3 px-4 text-left">{{ trans('messages.actions', [], session('locale')) }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <template x-for="item in paginatedItems()" :key="item.id">
-          <tr class="border-t hover:bg-indigo-50 transition">
-            <td class="py-3 px-4">
-              <img :src="item.image" 
-                   :alt="item.design_name"
-                   class="w-16 h-16 object-cover rounded-lg">
-            </td>
-            <td class="py-3 px-4 font-semibold" x-text="item.design_name"></td>
-            <td class="py-3 px-4 text-gray-600" x-text="item.abaya_code"></td>
-            <td class="py-3 px-4">
-              <span class="px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-semibold" x-text="item.quantity || 1"></span>
-            </td>
-            <td class="py-3 px-4">
-              <p class="font-semibold text-indigo-600" x-text="item.order_no || '—'"></p>
-            </td>
-            <td class="py-3 px-4">
-              <p class="font-medium" x-text="item.customer_name || 'N/A'"></p>
-            </td>
-            <td class="py-3 px-4">
-              <p class="text-gray-600" x-text="item.customer_phone || 'N/A'"></p>
-            </td>
-            <td class="py-3 px-4">
-              <span x-show="item.maintenance_status" 
-                    :class="getStatusBadgeClass(item.maintenance_status)" 
-                    class="px-3 py-1 rounded-full text-xs font-semibold"
-                    x-text="getStatusLabel(item.maintenance_status)"></span>
-              <span x-show="!item.maintenance_status" 
-                    class="px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600">
-                {{ trans('messages.not_in_maintenance', [], session('locale')) }}
-              </span>
-            </td>
-            <td class="py-3 px-4">
-              <div class="flex items-center gap-2">
-                <button x-show="item.maintenance_status === 'delivered_to_tailor' && item.maintenance_notes"
-                        @click="openNotesModal(item)"
-                        class="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
-                        title="{{ trans('messages.view_notes', [], session('locale')) }}">
-                  <span class="material-symbols-outlined text-lg">note</span>
-                </button>
-                <button x-show="item.maintenance_status === 'delivered_to_tailor'"
-                        @click="openActionModal(item)"
-                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">
-                  {{ trans('messages.receive_from_tailor', [], session('locale')) }}
-                </button>
-                <button x-show="item.maintenance_status === 'received_from_tailor'"
-                        @click="openDeliverModal(item)"
-                        class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">
-                  {{ trans('messages.deliver', [], session('locale')) ?: 'Deliver' }}
-                </button>
-                <button x-show="item.maintenance_status !== 'delivered_to_tailor' && item.maintenance_status !== 'received_from_tailor'"
-                        @click="openActionModal(item)"
-                        class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">
-                  {{ trans('messages.send_to_tailor', [], session('locale')) }}
-                </button>
-              </div>
-            </td>
+    <div class="overflow-x-auto" x-show="!loading && filteredItems().length > 0">
+      <table class="w-full text-sm hidden md:table min-w-full">
+        <thead class="bg-gray-100 text-gray-700">
+          <tr>
+            <th class="py-3 px-4 text-left">{{ trans('messages.image', [], session('locale')) }}</th>
+            <th class="py-3 px-4 text-left">{{ trans('messages.design_name', [], session('locale')) }}</th>
+            <th class="py-3 px-4 text-left">{{ trans('messages.code', [], session('locale')) }}</th>
+            <th class="py-3 px-4 text-left">{{ trans('messages.quantity', [], session('locale')) ?: 'Quantity' }}</th>
+            <th class="py-3 px-4 text-left">{{ trans('messages.order_no', [], session('locale')) }}</th>
+            <th class="py-3 px-4 text-left">{{ trans('messages.customer', [], session('locale')) }}</th>
+            <th class="py-3 px-4 text-left">{{ trans('messages.customer_phone', [], session('locale')) }}</th>
+            <th class="py-3 px-4 text-left">{{ trans('messages.tailor', [], session('locale')) }}</th>
+            <th class="py-3 px-4 text-left">{{ trans('messages.status', [], session('locale')) }}</th>
+            <th class="py-3 px-4 text-left">{{ trans('messages.actions', [], session('locale')) }}</th>
           </tr>
-        </template>
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          <template x-for="item in paginatedItems()" :key="item.id">
+            <tr class="border-t hover:bg-indigo-50 transition">
+              <td class="py-3 px-4">
+                <img :src="item.image" 
+                     :alt="item.design_name"
+                     class="w-16 h-16 object-cover rounded-lg">
+              </td>
+              <td class="py-3 px-4 font-semibold" x-text="item.design_name"></td>
+              <td class="py-3 px-4 text-gray-600" x-text="item.abaya_code"></td>
+              <td class="py-3 px-4">
+                <span class="px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-semibold" x-text="item.quantity > 0 ? item.quantity : (item.total_quantity || 0)"></span>
+              </td>
+              <td class="py-3 px-4">
+                <p class="font-semibold text-indigo-600" x-text="item.order_no || '—'"></p>
+              </td>
+              <td class="py-3 px-4">
+                <p class="font-medium" x-text="item.customer_name || 'N/A'"></p>
+              </td>
+              <td class="py-3 px-4">
+                <p class="text-gray-600" x-text="item.customer_phone || 'N/A'"></p>
+              </td>
+              <td class="py-3 px-4">
+                <p class="font-medium text-indigo-600" x-text="item.tailor_name || '—'"></p>
+              </td>
+              <td class="py-3 px-4">
+                <span x-show="item.maintenance_status" 
+                      :class="getStatusBadgeClass(item.maintenance_status)" 
+                      class="px-3 py-1 rounded-full text-xs font-semibold"
+                      x-text="getStatusLabel(item.maintenance_status)"></span>
+                <span x-show="!item.maintenance_status" 
+                      class="px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600">
+                  {{ trans('messages.not_in_maintenance', [], session('locale')) }}
+                </span>
+              </td>
+              <td class="py-3 px-4">
+                <div class="flex items-center gap-2">
+                  <button x-show="item.maintenance_status === 'delivered_to_tailor' && item.maintenance_notes"
+                          @click="openNotesModal(item)"
+                          class="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                          title="{{ trans('messages.view_notes', [], session('locale')) }}">
+                    <span class="material-symbols-outlined text-lg">note</span>
+                  </button>
+                  <button x-show="item.maintenance_status === 'delivered_to_tailor'"
+                          @click="openActionModal(item)"
+                          class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">
+                    {{ trans('messages.receive_from_tailor', [], session('locale')) }}
+                  </button>
+                  <button x-show="item.maintenance_status === 'received_from_tailor'"
+                          @click="openDeliverModal(item)"
+                          class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">
+                    {{ trans('messages.deliver', [], session('locale')) ?: 'Deliver' }}
+                  </button>
+                  <button x-show="item.maintenance_status !== 'delivered_to_tailor' && item.maintenance_status !== 'received_from_tailor'"
+                          @click="openActionModal(item)"
+                          class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">
+                    {{ trans('messages.send_to_tailor', [], session('locale')) }}
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
 
     <!-- Mobile Cards -->
     <div class="md:hidden divide-y" x-show="!loading && filteredItems().length > 0">
@@ -192,11 +253,15 @@
               <p class="text-sm text-gray-600" x-text="'{{ trans('messages.code', [], session('locale')) }}: ' + (item.abaya_code || 'N/A')"></p>
               <p class="text-sm mt-1">
                 <span class="text-indigo-600 font-semibold" x-text="'{{ trans('messages.order_no', [], session('locale')) }}: ' + (item.order_no || '—')"></span>
-                <span class="ml-2 px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-semibold" x-text="'{{ trans('messages.quantity', [], session('locale')) ?: 'Qty' }}: ' + (item.quantity || 1)"></span>
+                <span class="ml-2 px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-semibold" x-text="'{{ trans('messages.quantity', [], session('locale')) ?: 'Qty' }}: ' + (item.quantity > 0 ? item.quantity : (item.total_quantity || 0))"></span>
               </p>
               <p class="text-sm mt-1">
                 <span class="font-medium" x-text="item.customer_name || 'N/A'"></span>
                 <span class="text-gray-500" x-text="' - ' + (item.customer_phone || 'N/A')"></span>
+              </p>
+              <p class="text-sm mt-1" x-show="item.tailor_name">
+                <span class="text-gray-600">{{ trans('messages.tailor', [], session('locale')) }}: </span>
+                <span class="font-medium text-indigo-600" x-text="item.tailor_name"></span>
               </p>
               <div class="flex gap-2 mt-2">
                 <span :class="getStatusBadgeClass(item.maintenance_status)" 
@@ -284,70 +349,72 @@
       </div>
 
       <!-- History Table -->
-      <table class="w-full text-sm hidden md:table" x-show="!loadingHistory && repairHistory.length > 0">
-        <thead class="bg-gray-100 text-gray-700">
-          <tr>
-            <th class="py-3 px-4 text-left">{{ trans('messages.order_no', [], session('locale')) }}</th>
-            <th class="py-3 px-4 text-left">{{ trans('messages.design_name', [], session('locale')) }}</th>
-            <th class="py-3 px-4 text-left">{{ trans('messages.code', [], session('locale')) }}</th>
-            <th class="py-3 px-4 text-left">{{ trans('messages.customer', [], session('locale')) }}</th>
-            <th class="py-3 px-4 text-left">{{ trans('messages.customer_phone', [], session('locale')) }}</th>
-            <th class="py-3 px-4 text-left">{{ trans('messages.tailor', [], session('locale')) }}</th>
-            <th class="py-3 px-4 text-left">{{ trans('messages.sent_date', [], session('locale')) }}</th>
-            <th class="py-3 px-4 text-left">{{ trans('messages.received_date', [], session('locale')) }}</th>
-            <th class="py-3 px-4 text-left">{{ trans('messages.delivery_charges', [], session('locale')) }}</th>
-            <th class="py-3 px-4 text-left">{{ trans('messages.repair_cost', [], session('locale')) }}</th>
-            <th class="py-3 px-4 text-left">{{ trans('messages.cost_bearer', [], session('locale')) }}</th>
-            <th class="py-3 px-4 text-left">{{ trans('messages.notes', [], session('locale')) }}</th>
-            <th class="py-3 px-4 text-left">{{ trans('messages.status', [], session('locale')) }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <template x-for="item in paginatedHistory()" :key="item.id">
-            <tr class="border-t hover:bg-indigo-50 transition">
-              <td class="py-3 px-4 font-semibold text-indigo-600" x-text="item.order_no || '—'"></td>
-              <td class="py-3 px-4 font-semibold" x-text="item.design_name || 'N/A'"></td>
-              <td class="py-3 px-4 text-gray-600" x-text="item.abaya_code || 'N/A'"></td>
-              <td class="py-3 px-4">
-                <p class="font-medium" x-text="item.customer_name || 'N/A'"></p>
-              </td>
-              <td class="py-3 px-4">
-                <p class="text-gray-600" x-text="item.customer_phone || 'N/A'"></p>
-              </td>
-              <td class="py-3 px-4">
-                <p class="font-medium" x-text="item.tailor_name || 'N/A'"></p>
-              </td>
-              <td class="py-3 px-4 text-sm text-gray-600" x-text="item.sent_date || '—'"></td>
-              <td class="py-3 px-4 text-sm text-gray-600" x-text="item.received_date || '—'"></td>
-              <td class="py-3 px-4 text-sm font-semibold" x-text="item.delivery_charges ? item.delivery_charges + ' ر.ع' : '—'"></td>
-              <td class="py-3 px-4 text-sm font-semibold" x-text="item.repair_cost ? item.repair_cost + ' ر.ع' : '—'"></td>
-              <td class="py-3 px-4">
-                <span x-show="item.cost_bearer" 
-                      :class="item.cost_bearer === 'customer' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'"
-                      class="px-3 py-1 rounded-full text-xs font-semibold"
-                      x-text="item.cost_bearer === 'customer' ? '{{ trans('messages.customer_bearer', [], session('locale')) }}' : '{{ trans('messages.company_bearer', [], session('locale')) }}'"></span>
-                <span x-show="!item.cost_bearer" class="text-gray-400">—</span>
-              </td>
-              <td class="py-3 px-4 text-sm text-gray-700 max-w-xs">
-                <div class="flex items-center gap-2">
-                  <p class="truncate flex-1" :title="item.maintenance_notes || '—'" x-text="item.maintenance_notes ? (item.maintenance_notes.length > 30 ? item.maintenance_notes.substring(0, 30) + '...' : item.maintenance_notes) : '—'"></p>
-                  <button x-show="item.maintenance_notes"
-                          @click="openNotesModal(item)"
-                          class="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition flex-shrink-0"
-                          title="{{ trans('messages.view_notes', [], session('locale')) }}">
-                    <span class="material-symbols-outlined text-base">visibility</span>
-                  </button>
-                </div>
-              </td>
-              <td class="py-3 px-4">
-                <span :class="getStatusBadgeClass(item.maintenance_status)" 
-                      class="px-3 py-1 rounded-full text-xs font-semibold"
-                      x-text="getStatusLabel(item.maintenance_status)"></span>
-              </td>
+      <div class="overflow-x-auto" x-show="!loadingHistory && repairHistory.length > 0">
+        <table class="w-full text-sm hidden md:table min-w-full">
+          <thead class="bg-gray-100 text-gray-700">
+            <tr>
+              <th class="py-3 px-4 text-left">{{ trans('messages.order_no', [], session('locale')) }}</th>
+              <th class="py-3 px-4 text-left">{{ trans('messages.design_name', [], session('locale')) }}</th>
+              <th class="py-3 px-4 text-left">{{ trans('messages.code', [], session('locale')) }}</th>
+              <th class="py-3 px-4 text-left">{{ trans('messages.customer', [], session('locale')) }}</th>
+              <th class="py-3 px-4 text-left">{{ trans('messages.customer_phone', [], session('locale')) }}</th>
+              <th class="py-3 px-4 text-left">{{ trans('messages.tailor', [], session('locale')) }}</th>
+              <th class="py-3 px-4 text-left">{{ trans('messages.sent_date', [], session('locale')) }}</th>
+              <th class="py-3 px-4 text-left">{{ trans('messages.received_date', [], session('locale')) }}</th>
+              <th class="py-3 px-4 text-left">{{ trans('messages.delivery_charges', [], session('locale')) }}</th>
+              <th class="py-3 px-4 text-left">{{ trans('messages.repair_cost', [], session('locale')) }}</th>
+              <th class="py-3 px-4 text-left">{{ trans('messages.cost_bearer', [], session('locale')) }}</th>
+              <th class="py-3 px-4 text-left">{{ trans('messages.notes', [], session('locale')) }}</th>
+              <th class="py-3 px-4 text-left">{{ trans('messages.status', [], session('locale')) }}</th>
             </tr>
-          </template>
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            <template x-for="item in paginatedHistory()" :key="item.id">
+              <tr class="border-t hover:bg-indigo-50 transition">
+                <td class="py-3 px-4 font-semibold text-indigo-600" x-text="item.order_no || '—'"></td>
+                <td class="py-3 px-4 font-semibold" x-text="item.design_name || 'N/A'"></td>
+                <td class="py-3 px-4 text-gray-600" x-text="item.abaya_code || 'N/A'"></td>
+                <td class="py-3 px-4">
+                  <p class="font-medium" x-text="item.customer_name || 'N/A'"></p>
+                </td>
+                <td class="py-3 px-4">
+                  <p class="text-gray-600" x-text="item.customer_phone || 'N/A'"></p>
+                </td>
+                <td class="py-3 px-4">
+                  <p class="font-medium" x-text="item.tailor_name || 'N/A'"></p>
+                </td>
+                <td class="py-3 px-4 text-sm text-gray-600" x-text="item.sent_date || '—'"></td>
+                <td class="py-3 px-4 text-sm text-gray-600" x-text="item.received_date || '—'"></td>
+                <td class="py-3 px-4 text-sm font-semibold" x-text="item.delivery_charges ? item.delivery_charges + ' ر.ع' : '—'"></td>
+                <td class="py-3 px-4 text-sm font-semibold" x-text="item.repair_cost ? item.repair_cost + ' ر.ع' : '—'"></td>
+                <td class="py-3 px-4">
+                  <span x-show="item.cost_bearer" 
+                        :class="item.cost_bearer === 'customer' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'"
+                        class="px-3 py-1 rounded-full text-xs font-semibold"
+                        x-text="item.cost_bearer === 'customer' ? '{{ trans('messages.customer_bearer', [], session('locale')) }}' : '{{ trans('messages.company_bearer', [], session('locale')) }}'"></span>
+                  <span x-show="!item.cost_bearer" class="text-gray-400">—</span>
+                </td>
+                <td class="py-3 px-4 text-sm text-gray-700 max-w-xs">
+                  <div class="flex items-center gap-2">
+                    <p class="truncate flex-1" :title="item.maintenance_notes || '—'" x-text="item.maintenance_notes ? (item.maintenance_notes.length > 30 ? item.maintenance_notes.substring(0, 30) + '...' : item.maintenance_notes) : '—'"></p>
+                    <button x-show="item.maintenance_notes"
+                            @click="openNotesModal(item)"
+                            class="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition flex-shrink-0"
+                            title="{{ trans('messages.view_notes', [], session('locale')) }}">
+                      <span class="material-symbols-outlined text-base">visibility</span>
+                    </button>
+                  </div>
+                </td>
+                <td class="py-3 px-4">
+                  <span :class="getStatusBadgeClass(item.maintenance_status)" 
+                        class="px-3 py-1 rounded-full text-xs font-semibold"
+                        x-text="getStatusLabel(item.maintenance_status)"></span>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
 
       <!-- Mobile History Cards -->
       <div class="md:hidden divide-y" x-show="!loadingHistory && repairHistory.length > 0">
@@ -516,7 +583,7 @@
                 class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">
           {{ trans('messages.cancel', [], session('locale')) }}
         </button>
-        <button @click="performAction()"
+        <button @click="performAction($event)"
                 :class="selectedItem.maintenance_status === 'delivered_to_tailor' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-orange-600 hover:bg-orange-700'"
                 class="px-4 py-2 text-white rounded-lg">
           <span x-text="selectedItem.maintenance_status === 'delivered_to_tailor' ? '{{ trans('messages.confirm_receive', [], session('locale')) }}' : '{{ trans('messages.send', [], session('locale')) }}'"></span>
@@ -618,8 +685,7 @@
                step="0.001"
                x-model="deliveryCharges"
                @input="updatePaymentAmount()"
-               :disabled="costBearer === 'company'"
-               :class="costBearer === 'company' ? 'form-input w-full border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed' : 'form-input w-full border-gray-300 rounded-lg'">
+               class="form-input w-full border-gray-300 rounded-lg">
       </div>
 
       <div class="mb-4">
@@ -628,8 +694,7 @@
                step="0.001"
                x-model="repairCost"
                @input="updatePaymentAmount()"
-               :disabled="costBearer === 'company'"
-               :class="costBearer === 'company' ? 'form-input w-full border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed' : 'form-input w-full border-gray-300 rounded-lg'">
+               class="form-input w-full border-gray-300 rounded-lg">
       </div>
 
       <!-- Payment Section (only show if customer is bearer and there are costs) -->
@@ -670,7 +735,7 @@
                 class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">
           {{ trans('messages.cancel', [], session('locale')) }}
         </button>
-        <button @click="performDeliver()"
+        <button @click="performDeliver($event)"
                 class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg">
           {{ trans('messages.confirm_deliver', [], session('locale')) ?: 'Confirm Deliver' }}
         </button>
@@ -712,12 +777,12 @@
 
       <div x-show="!loadingOrderItems && orderItems.length > 0" class="space-y-3">
         <template x-for="item in orderItems" :key="item.id">
-          <div class="flex items-center gap-4 p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
+          <div class="flex items-center gap-4 p-3 border border-gray-200 rounded-lg hover:bg-gray-50" 
+               :class="selectedOrderItems.includes(String(item.id)) ? 'bg-indigo-50 border-indigo-300' : ''">
             <input type="checkbox" 
-                   :value="item.id"
+                   :value="String(item.id)"
                    x-model="selectedOrderItems"
-                   :disabled="item.maintenance_status"
-                   :class="item.maintenance_status ? 'opacity-50 cursor-not-allowed' : ''"
+                   @change="handleItemCheckboxChange(item)"
                    class="w-5 h-5 text-indigo-600 rounded">
             <img :src="item.image" 
                  :alt="item.design_name"
@@ -725,17 +790,19 @@
             <div class="flex-1">
               <p class="font-semibold" x-text="item.design_name"></p>
               <p class="text-sm text-gray-600" x-text="'{{ trans('messages.code', [], session('locale')) }}: ' + item.abaya_code"></p>
-              <p class="text-xs text-gray-500" x-text="'{{ trans('messages.quantity', [], session('locale')) ?: 'Quantity' }}: ' + item.quantity"></p>
+              <p class="text-xs text-gray-500" x-text="'{{ trans('messages.total_quantity', [], session('locale')) ?: 'Total Quantity' }}: ' + item.quantity"></p>
             </div>
-            <div>
-              <span x-show="item.maintenance_status" 
-                    :class="item.maintenance_status === 'delivered_to_tailor' ? 'bg-orange-100 text-orange-800' : item.maintenance_status === 'received_from_tailor' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'"
-                    class="px-3 py-1 rounded-full text-xs font-semibold"
-                    x-text="getMaintenanceStatusLabel(item.maintenance_status)"></span>
-              <span x-show="!item.maintenance_status" 
-                    class="px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600">
-                {{ trans('messages.not_in_maintenance', [], session('locale')) }}
-              </span>
+            <div x-show="selectedOrderItems.includes(String(item.id)) && item.quantity > 1" 
+                 x-transition
+                 class="flex items-center gap-2">
+              <label class="text-sm font-medium text-gray-700">{{ trans('messages.quantity_to_send', [], session('locale')) ?: 'Qty to Send' }}:</label>
+              <input type="number" 
+                     :min="1"
+                     :max="item.quantity"
+                     x-model="item.selectedQuantity"
+                     @input="validateItemQuantity(item)"
+                     class="w-20 px-2 py-1 border border-gray-300 rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500">
+              <span class="text-xs text-gray-500">/ <span x-text="item.quantity"></span></span>
             </div>
           </div>
         </template>
@@ -769,7 +836,7 @@
                 class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">
           {{ trans('messages.cancel', [], session('locale')) }}
         </button>
-        <button @click="sendSelectedItemsToMaintenance()"
+        <button @click="sendSelectedItemsToMaintenance($event)"
                 :disabled="selectedOrderItems.length === 0 || !selectedTailorId"
                 :class="(selectedOrderItems.length === 0 || !selectedTailorId) ? 'opacity-50 cursor-not-allowed' : ''"
                 class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">

@@ -48,11 +48,27 @@ public function getchannels() {
 }
 
     public function destroy(channel $channel) {
+        // Prevent deletion of channel with ID 1
+        if ($channel->id == 1) {
+            return response()->json([
+                'error' => true,
+                'message' => trans('messages.cannot_delete_primary_channel', [], session('locale')) ?: 'Cannot delete primary channel (ID: 1)'
+            ], 403);
+        }
+        
         $channel->delete();
         return response()->json(['message' => 'Deleted']);
     }
 
     public function updateStatus(Request $request, channel $channel) {
+        // Prevent status update for channel with ID 1
+        if ($channel->id == 1) {
+            return response()->json([
+                'error' => true,
+                'message' => trans('messages.cannot_update_primary_channel_status', [], session('locale')) ?: 'Cannot update status for primary channel (ID: 1)'
+            ], 403);
+        }
+        
         $request->validate([
             'status_for_pos' => 'required|integer|in:1,2'
         ]);

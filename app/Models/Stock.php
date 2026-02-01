@@ -18,6 +18,7 @@ class Stock extends Model
         'tailor_id',
         'quantity',
         'status',
+        'website_data_delivery_status',
         'notification_limit',
         'mode',
         'added_by',
@@ -51,5 +52,17 @@ class Stock extends Model
     public function category()
     {
         return $this->belongsTo(Category::class);
+    }
+
+    // Stock has abaya materials
+    public function abayaMaterials()
+    {
+        return $this->hasMany(AbayaMaterial::class, 'abaya_id');
+    }
+
+    // Stock has audit logs
+    public function auditLogs()
+    {
+        return $this->hasMany(StockAuditLog::class, 'stock_id');
     }
 }

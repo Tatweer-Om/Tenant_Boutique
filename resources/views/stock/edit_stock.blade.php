@@ -16,7 +16,7 @@
     <!-- Header with back button -->
     <div class="flex items-center justify-between mb-6">
       <div class="flex items-center gap-4">
-        <a href="{{ url('view_stock') }}" 
+        <a href="{{ url('view_stock') }}{{ isset($returnPage) && $returnPage > 1 ? '?page=' . $returnPage : '' }}" 
            class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors">
           <span class="material-symbols-outlined text-gray-600">arrow_back</span>
         </a>
@@ -30,6 +30,7 @@
     <form id="update_abaya" enctype="multipart/form-data" class="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
       @csrf
       <input type="hidden" value="{{ $stock->id }}" name="stock_id" id="stock_id"/>
+      <input type="hidden" name="return_page" value="{{ $returnPage ?? 1 }}" />
       
       <!-- Form Content -->
       <div class="p-6 sm:p-8 space-y-6">
@@ -182,69 +183,118 @@
           </div>
 
           <!-- Tailors Selection -->
-          <div x-data="{ 
-            open: false, 
-            selected: [
-              @if(!empty($selectedTailors) && is_array($selectedTailors))
-                @foreach($tailors as $tailor)
-                  @if(in_array($tailor->id, $selectedTailors))
-                    {id: {{ $tailor->id }}, name: '{{ addslashes($tailor->tailor_name) }}'},
-                  @endif
-                @endforeach
-              @endif
-            ]
-          }" class="relative">
-            <span class="text-sm font-semibold text-gray-700 block mb-1.5">{{ trans('messages.tailors', [], session('locale')) }}</span>
-            <button @click="open = !open"
-                    type="button"
-                    class="w-full flex items-center justify-between h-11 rounded-lg px-4 border border-gray-300 bg-white text-sm text-gray-700 focus:ring-2 focus:ring-primary/50 transition hover:border-primary">
-              <span x-show="selected.length === 0" class="text-gray-400">{{ trans('messages.select_tailors', [], session('locale')) }}</span>
-              <div class="flex flex-wrap gap-2" x-show="selected.length > 0">
-                <template x-for="tailor in selected" :key="tailor.id">
-                  <span class="bg-primary/10 text-primary px-2 py-1 rounded-md text-xs font-semibold"
-                        x-text="tailor.name"></span>
-                </template>
-              </div>
-              <span class="material-symbols-outlined text-gray-500 text-lg">expand_more</span>
-            </button>
-
-            <!-- Dropdown list -->
-            <div x-show="open" 
-                 @click.away="open = false"
-                 x-transition
-                 class="absolute w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-xl z-50 max-h-56 overflow-y-auto">
+          <label class="flex flex-col">
+            <span class="text-sm font-semibold text-gray-700 mb-1.5">{{ trans('messages.tailors', [], session('locale')) }}</span>
+            <select class="h-11 rounded-lg px-4 border border-gray-300 focus:ring-2 focus:ring-primary/50 focus:border-primary transition" 
+                    name="tailor_id" 
+                    id="tailor_id">
+              <option value="">{{ trans('messages.select_tailors', [], session('locale')) }}</option>
               @foreach($tailors as $tailor)
-              <label class="flex items-center gap-2 px-4 py-2 hover:bg-gray-50 cursor-pointer transition">
-                <input type="checkbox" 
-                       name="tailor_id[]" 
-                       value="{{ $tailor->id }}"
-                       :checked="selected.some(s => s.id === {{ $tailor->id }})"
-                       @change="
-                         if($event.target.checked){
-                           if(!selected.some(s => s.id === {{ $tailor->id }})){
-                             selected.push({id: {{ $tailor->id }}, name: '{{ addslashes($tailor->tailor_name) }}'});
-                           }
-                         } else {
-                           selected = selected.filter(x => x.id !== {{ $tailor->id }});
-                         }
-                       "
-                       class="rounded text-primary focus:ring-primary/50" />
-                <span class="text-sm">{{ $tailor->tailor_name }}</span>
-              </label>
+                <option value="{{ $tailor->id }}" {{ isset($selectedTailorId) && $selectedTailorId == $tailor->id ? 'selected' : '' }}>{{ $tailor->tailor_name }}</option>
               @endforeach
-            </div>
+            </select>
+          </label>
+        </div>
+
+        <!-- Materials Assignment Section (Editable) -->
+        <div class="pt-4 border-t border-gray-200">
+          <div class="flex items-center gap-2 pb-3 border-b border-gray-200">
+            <span class="material-symbols-outlined text-primary text-xl">inventory</span>
+            <h2 class="text-lg font-bold text-gray-800">{{ trans('messages.materials_assignment', [], session('locale')) ?: 'Materials Assignment' }}</h2>
           </div>
 
-          <!-- Total Quantity -->
-          <label class="flex flex-col">
-            <span class="text-sm font-semibold text-gray-700 mb-1.5">{{ trans('messages.total_quantity', [], session('locale')) ?: 'Total Quantity' }}</span>
-            <input type="number" 
-                   name="total_quantity" 
-                   id="total_quantity"
-                   value="{{ $stock->quantity ?? '' }}"
-                   placeholder="{{ trans('messages.total_quantity_placeholder', [], session('locale')) ?: 'Enter total quantity' }}"
-                   class="h-11 rounded-lg px-4 border border-gray-300 focus:ring-2 focus:ring-primary/50 focus:border-primary transition" />
-          </label>
+          <!-- Materials Table - Full Width -->
+          <!-- When materials are already assigned: show those. When none assigned: show all materials like add_stock -->
+          <div class="row">
+            <div class="col-12 col-lg-12">
+              <div class="overflow-x-auto border border-gray-200 rounded-lg max-h-64 overflow-y-auto">
+                <table class="min-w-full text-xs">
+                  <thead class="bg-gray-50 sticky top-0">
+                    <tr>
+                      <th class="px-2 py-1.5 border text-center font-semibold text-xs">{{ trans('messages.material_name', [], session('locale')) ?: 'Material Name' }}</th>
+                      <th class="px-2 py-1.5 border text-center font-semibold text-xs w-28">{{ trans('messages.quantity', [], session('locale')) ?: 'Quantity' }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @if(count($existingMaterials) > 0)
+                      {{-- Already assigned: show existing materials --}}
+                      @foreach($existingMaterials as $index => $material)
+                        <tr class="hover:bg-gray-50 border-b">
+                          <td class="px-2 py-1.5 border text-center">
+                            <div class="flex items-center gap-1.5 justify-center">
+                              @if($material['material_image'])
+                                <img src="{{ asset('images/materials/' . $material['material_image']) }}" 
+                                     alt="{{ $material['material_name'] }}" 
+                                     class="w-6 h-6 object-cover rounded">
+                              @endif
+                              <span class="font-medium text-xs">{{ $material['material_name'] }}</span>
+                              <span class="text-xs text-gray-400">({{ $material['unit'] ?? 'meters' }})</span>
+                            </div>
+                            <input type="hidden" name="abaya_materials[{{ $index }}][material_id]" value="{{ $material['material_id'] ?? $material['id'] ?? '' }}">
+                            <input type="hidden" name="abaya_materials[{{ $index }}][unit]" value="{{ $material['unit'] ?? 'meters' }}">
+                          </td>
+                          <td class="px-2 py-1.5 border text-center">
+                            <div class="flex items-center gap-1 justify-center">
+                              <input 
+                                type="number" 
+                                step="0.01"
+                                min="0"
+                                name="abaya_materials[{{ $index }}][quantity]"
+                                value="{{ $material['quantity'] ?? 0 }}"
+                                placeholder="0"
+                                oninput="if(this.value < 0) this.value = 0;"
+                                onkeydown="if(event.key === '-' || event.key === 'e' || event.key === 'E') event.preventDefault();"
+                                class="h-8 w-20 text-center rounded border border-gray-300 focus:ring-1 focus:ring-primary/50 focus:border-primary text-xs transition" />
+                              <span class="text-xs text-gray-400">{{ $material['unit'] ?? 'meters' }}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      @endforeach
+                    @else
+                      {{-- No materials assigned: show all materials like add_stock --}}
+                      @forelse($materials as $index => $material)
+                        <tr class="hover:bg-gray-50 border-b">
+                          <td class="px-2 py-1.5 border text-center">
+                            <div class="flex items-center gap-1.5 justify-center">
+                              @if($material->material_image)
+                                <img src="{{ asset('images/materials/' . $material->material_image) }}" 
+                                     alt="{{ $material->material_name }}" 
+                                     class="w-6 h-6 object-cover rounded">
+                              @endif
+                              <span class="font-medium text-xs">{{ $material->material_name }}</span>
+                              <span class="text-xs text-gray-400">({{ $material->unit ?: 'meters' }})</span>
+                            </div>
+                            <input type="hidden" name="abaya_materials[{{ $index }}][material_id]" value="{{ $material->id }}">
+                            <input type="hidden" name="abaya_materials[{{ $index }}][unit]" value="{{ $material->unit ?: 'meters' }}">
+                          </td>
+                          <td class="px-2 py-1.5 border text-center">
+                            <div class="flex items-center gap-1 justify-center">
+                              <input 
+                                type="number" 
+                                step="0.01"
+                                min="0"
+                                name="abaya_materials[{{ $index }}][quantity]"
+                                placeholder="0"
+                                oninput="if(this.value < 0) this.value = 0;"
+                                onkeydown="if(event.key === '-' || event.key === 'e' || event.key === 'E') event.preventDefault();"
+                                class="h-8 w-20 text-center rounded border border-gray-300 focus:ring-1 focus:ring-primary/50 focus:border-primary text-xs transition" />
+                              <span class="text-xs text-gray-400">{{ $material->unit ?: 'meters' }}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      @empty
+                        <tr>
+                          <td colspan="2" class="px-3 py-4 text-center text-gray-400 text-xs">
+                            {{ trans('messages.no_materials_found', [], session('locale')) ?: 'No materials found in database' }}
+                          </td>
+                        </tr>
+                      @endforelse
+                    @endif
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Availability Options Section -->
@@ -318,19 +368,14 @@
                       <td class="px-4 py-2 border">
                         <input type="number" 
                                data-validate="quantity"
-                               @keydown="validateQuantityInput($event)"
-                               @paste="cleanQuantityOnPaste($event)"
-                               class="h-10 w-24 text-center rounded-md border border-gray-300 focus:ring-2 focus:ring-primary/50" 
+                               class="h-10 w-24 text-center rounded-md border border-gray-300 bg-gray-50 cursor-not-allowed" 
                                :name="'colors[' + row.color_id + '][qty]'"
                                x-model="row.qty" 
+                               readonly
                                placeholder="0">
                       </td>
                       <td class="px-4 py-2 border text-center">
-                        <button type="button" 
-                                @click="rows.splice(index,1)" 
-                                class="text-red-500 hover:text-red-700 transition">
-                          <span class="material-symbols-outlined text-lg">delete</span>
-                        </button>
+                        <!-- Delete button removed in edit mode -->
                       </td>
                     </tr>
                   </template>
@@ -338,24 +383,7 @@
               </table>
             </div>
 
-            <div class="mt-4 flex gap-3 items-center">
-              <select x-ref="colorSelect" class="h-10 rounded-lg px-3 border border-gray-300 text-sm focus:ring-2 focus:ring-primary/50">
-                <template x-for="c in colors" :key="c.id">
-                  <option :value="c.id" x-text="c.name"></option>
-                </template>
-              </select>
-              <button type="button" 
-                      @click="
-                        const selectedId = Number($refs.colorSelect.value);
-                        if (!rows.find(r => r.color_id === selectedId)) {
-                          rows.push({ color_id: selectedId, qty: 0 });
-                        }
-                      " 
-                      class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary/90 flex items-center gap-1 text-sm transition">
-                <span class="material-symbols-outlined text-sm">add</span> 
-                {{ trans('messages.add_color', [], session('locale')) }}
-              </button>
-            </div>
+            <!-- Add color button removed in edit mode - colors are readonly -->
           </div>
 
           <!-- Size Only Mode -->
@@ -391,19 +419,14 @@
                       <td class="border px-4 py-2">
                         <input type="number" 
                                data-validate="quantity"
-                               @keydown="validateQuantityInput($event)"
-                               @paste="cleanQuantityOnPaste($event)"
-                               class="w-24 h-10 text-center border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/50"
+                               class="w-24 h-10 text-center border border-gray-300 rounded-md bg-gray-50 cursor-not-allowed"
                                :name="'sizes['+row.size_id+'][qty]'"
                                x-model="row.qty" 
+                               readonly
                                placeholder="0">
                       </td>
                       <td class="border px-4 py-2 text-center">
-                        <button type="button" 
-                                @click="rows.splice(index,1)" 
-                                class="text-red-500 hover:text-red-700 transition">
-                          <span class="material-symbols-outlined text-lg">delete</span>
-                        </button>
+                        <!-- Delete button removed in edit mode -->
                       </td>
                     </tr>
                   </template>
@@ -411,52 +434,114 @@
               </table>
             </div>
 
-            <div class="mt-4 flex gap-3 items-center">
-              <select x-ref="sizeSelect" class="h-10 rounded-lg px-4 border border-gray-300 text-sm focus:ring-2 focus:ring-primary/50 w-64">
-                <template x-for="s in availableSizes" :key="s.id">
-                  <option :value="s.id" x-text="s.name"></option>
-                </template>
-              </select>
-              <button type="button" 
-                      @click="
-                        const selectedId = Number($refs.sizeSelect.value);
-                        const selectedSize = availableSizes.find(s => s.id === selectedId);
-                        if (selectedSize && !rows.find(r => r.size_id === selectedId)) {
-                          rows.push({ size_id: selectedId, size_name: selectedSize.name, qty: 0 });
-                        }
-                      " 
-                      class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary/90 flex items-center gap-1 text-sm transition">
-                <span class="material-symbols-outlined text-sm">add</span> 
-                {{ trans('messages.add_size', [], session('locale')) }}
-              </button>
-            </div>
+            <!-- Add size button removed in edit mode - sizes are readonly -->
           </div>
 
           <!-- Color & Size Mode -->
           <div x-show="mode === 'color_size'" 
                x-transition 
                x-data="{
-                 colors: [
+                 availableColors: [
                    @foreach($colors as $c)
-                     {
-                       id: {{ $c->id }},
-                       name: '{{ session('locale') == 'ar' ? $c->color_name_ar : $c->color_name_en }}',
-                       color_code: '{{ $c->color_code }}',
-                       sizes: [
-                         @foreach($stock->colorSizes->where('color_id', $c->id) as $cs)
-                           { size_id: {{ $cs->size_id }}, qty: {{ $cs->qty }} },
-                         @endforeach
-                       ]
-                     },
+                     { id: {{ $c->id }}, name: '{{ session('locale') == 'ar' ? $c->color_name_ar : $c->color_name_en }}', color_code: '{{ $c->color_code }}' },
                    @endforeach
                  ],
                  availableSizes: [
                    @foreach($sizes as $s)
                      { id: {{ $s->id }}, name: '{{ session('locale') == 'ar' ? $s->size_name_ar : $s->size_name_en }}' },
                    @endforeach
-                 ]
+                 ],
+                 colorSizes: [
+                   @foreach($stock->colorSizes as $cs)
+                     { color_id: {{ $cs->color_id }}, size_id: {{ $cs->size_id }}, qty: {{ $cs->qty }} },
+                   @endforeach
+                 ],
+                 checkAndMergeDuplicate(currentIndex) {
+                   if (!this.colorSizes || !this.colorSizes[currentIndex]) return;
+                   const currentItem = this.colorSizes[currentIndex];
+                   if (!currentItem.color_id || !currentItem.size_id) return;
+                   for (let i = 0; i < this.colorSizes.length; i++) {
+                     if (i === currentIndex) continue;
+                     const otherItem = this.colorSizes[i];
+                     if (otherItem && otherItem.color_id == currentItem.color_id && otherItem.size_id == currentItem.size_id) {
+                       const currentQty = parseInt(currentItem.qty) || 0;
+                       const otherQty = parseInt(otherItem.qty) || 0;
+                       otherItem.qty = currentQty + otherQty;
+                       this.colorSizes.splice(currentIndex, 1);
+                       if (typeof show_notification !== 'undefined') {
+                         show_notification('success', '{{ trans('messages.quantity_merged', [], session('locale')) ?: 'Quantity merged with existing color/size combination' }}');
+                       }
+                       return;
+                     }
+                   }
+                 },
+                 addColorSizeRow() {
+                   const hasEmptyRow = this.colorSizes && this.colorSizes.some(item => !item.color_id && !item.size_id);
+                   if (!hasEmptyRow) {
+                     if (!this.colorSizes) this.colorSizes = [];
+                     this.colorSizes.push({ color_id: '', size_id: '', qty: 1 });
+                   }
+                 }
                }">
-            <div class="overflow-x-auto">
+            <!-- Mobile cards -->
+            <div class="md:hidden space-y-3">
+              <template x-for="(item, index) in colorSizes" :key="'m-' + index">
+                <div class="border border-gray-200 rounded-xl p-4 bg-white">
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                      <p class="text-sm font-semibold text-gray-800">
+                        {{ trans('messages.color', [], session('locale')) }} / {{ trans('messages.size', [], session('locale')) }}
+                      </p>
+                      <p class="text-xs text-gray-500 mt-0.5">
+                        {{ trans('messages.quantity', [], session('locale')) ?: 'Quantity' }}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-1 gap-3 mt-3">
+                    <div>
+                      <label class="block text-xs font-semibold text-gray-600 mb-1">{{ trans('messages.color', [], session('locale')) }}</label>
+                      <select class="h-11 w-full rounded-lg px-3 border border-gray-300 text-sm bg-gray-50 cursor-not-allowed"
+                              :value="item.color_id"
+                              @change.prevent
+                              @mousedown.prevent
+                              style="pointer-events: none;">
+                        <option value="">{{ trans('messages.select_color', [], session('locale')) ?: 'Select Color' }}</option>
+                        <template x-for="c in availableColors" :key="c.id">
+                          <option :value="c.id" x-text="c.name" :selected="c.id == item.color_id"></option>
+                        </template>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold text-gray-600 mb-1">{{ trans('messages.size', [], session('locale')) }}</label>
+                      <select class="h-11 w-full rounded-lg px-3 border border-gray-300 text-sm bg-gray-50 cursor-not-allowed"
+                              :value="item.size_id"
+                              @change.prevent
+                              @mousedown.prevent
+                              style="pointer-events: none;">
+                        <option value="">{{ trans('messages.select_size', [], session('locale')) ?: 'Select Size' }}</option>
+                        <template x-for="s in availableSizes" :key="s.id">
+                          <option :value="s.id" x-text="s.name" :selected="s.id == item.size_id"></option>
+                        </template>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold text-gray-600 mb-1">{{ trans('messages.quantity', [], session('locale')) ?: 'Quantity' }}</label>
+                      <input type="number"
+                             data-validate="quantity"
+                             class="w-full h-11 text-center border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed"
+                             x-model="item.qty"
+                             readonly
+                             placeholder="0"
+                             min="1">
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+
+            <!-- Desktop table -->
+            <div class="hidden md:block overflow-x-auto">
               <table class="min-w-full text-sm border border-gray-200 rounded-lg">
                 <thead class="bg-gray-50">
                   <tr>
@@ -467,70 +552,63 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <template x-for="(color, ci) in colors" :key="ci">
-                    <template x-for="(size, si) in color.sizes" :key="si">
-                      <tr>
-                        <td class="px-4 py-2 border flex items-center gap-2">
-                          <div class="w-5 h-5 rounded-full border" :style="'background:' + color.color_code"></div>
-                          <span x-text="color.name"></span>
-                          <input type="hidden" :name="'color_sizes[' + color.id + '][' + size.size_id + '][color_id]'" :value="color.id">
-                        </td>
-                        <td class="border px-4 py-2">
-                          <select class="h-10 w-full rounded-lg px-3 border border-gray-300 text-sm focus:ring-2 focus:ring-primary/50"
-                                  :name="'color_sizes[' + color.id + '][' + size.size_id + '][size_id]'"
-                                  x-model="size.size_id">
-                            <template x-for="s in availableSizes" :key="s.id">
-                              <option :value="s.id" x-text="s.name"></option>
-                            </template>
-                          </select>
-                        </td>
-                        <td class="border px-4 py-2">
-                          <input type="number"
-                                 data-validate="quantity"
-                                 @keydown="validateQuantityInput($event)"
-                                 @paste="cleanQuantityOnPaste($event)"
-                                 class="w-24 h-10 text-center border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/50"
-                                 :name="'color_sizes[' + color.id + '][' + size.size_id + '][qty]'"
-                                 x-model="size.qty"
-                                 placeholder="0">
-                        </td>
-                        <td class="border px-4 py-2 text-center">
-                          <button type="button" 
-                                  @click="color.sizes.splice(si, 1)" 
-                                  class="text-red-500 hover:text-red-700 transition">
-                            <span class="material-symbols-outlined text-lg">delete</span>
-                          </button>
-                        </td>
-                      </tr>
-                    </template>
+                  <template x-for="(item, index) in colorSizes" :key="index">
+                    <tr>
+                      <td class="px-4 py-2 border">
+                        <select class="h-10 w-full rounded-lg px-3 border border-gray-300 text-sm bg-gray-50 cursor-not-allowed"
+                                :value="item.color_id"
+                                @change.prevent
+                                @mousedown.prevent
+                                style="pointer-events: none;">
+                          <option value="">{{ trans('messages.select_color', [], session('locale')) ?: 'Select Color' }}</option>
+                          <template x-for="c in availableColors" :key="c.id">
+                            <option :value="c.id" x-text="c.name" :selected="c.id == item.color_id"></option>
+                          </template>
+                        </select>
+                      </td>
+                      <td class="border px-4 py-2">
+                        <select class="h-10 w-full rounded-lg px-3 border border-gray-300 text-sm bg-gray-50 cursor-not-allowed"
+                                :value="item.size_id"
+                                @change.prevent
+                                @mousedown.prevent
+                                style="pointer-events: none;">
+                          <option value="">{{ trans('messages.select_size', [], session('locale')) ?: 'Select Size' }}</option>
+                          <template x-for="s in availableSizes" :key="s.id">
+                            <option :value="s.id" x-text="s.name" :selected="s.id == item.size_id"></option>
+                          </template>
+                        </select>
+                      </td>
+                      <td class="border px-4 py-2">
+                        <input type="number"
+                               data-validate="quantity"
+                               class="w-24 h-10 text-center border border-gray-300 rounded-md bg-gray-50 cursor-not-allowed"
+                               x-model="item.qty"
+                               readonly
+                               placeholder="0"
+                               min="1">
+                      </td>
+                      <td class="border px-4 py-2 text-center">
+                        <!-- Delete button removed in edit mode -->
+                      </td>
+                    </tr>
                   </template>
                 </tbody>
               </table>
             </div>
 
-            <div class="mt-4 flex gap-3 items-center">
-              <label class="text-sm font-medium text-gray-700">{{ trans('messages.add_new_row', [], session('locale')) }}</label>
-              <select x-ref="colorSelect" class="h-10 rounded-lg px-3 border border-gray-300 text-sm focus:ring-2 focus:ring-primary/50 w-32">
-                <template x-for="c in colors" :key="c.id">
-                  <option :value="c.id" x-text="c.name"></option>
+            <!-- Hidden inputs for submission (shared for mobile + desktop) -->
+            <div class="hidden">
+              <template x-for="(item, index) in colorSizes" :key="'h-' + index">
+                <template x-if="item.color_id && item.size_id">
+                  <div>
+                    <input type="hidden" :name="'color_sizes[' + item.color_id + '][' + item.size_id + '][qty]'" :value="item.qty">
+                    <input type="hidden" :name="'color_sizes[' + item.color_id + '][' + item.size_id + '][size_id]'" :value="item.size_id">
+                  </div>
                 </template>
-              </select>
-              <button type="button" 
-                      @click="
-                        const id = Number($refs.colorSelect.value);
-                        const color = colors.find(c => c.id === id);
-                        if (color) {
-                          color.sizes.push({
-                            size_id: availableSizes[0].id,
-                            qty: 0
-                          });
-                        }
-                      " 
-                      class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary/90 flex items-center gap-1 text-sm transition">
-                <span class="material-symbols-outlined text-sm">add</span> 
-                {{ trans('messages.add', [], session('locale')) }}
-              </button>
+              </template>
             </div>
+
+            <!-- Add button removed in edit mode - colors and sizes are readonly -->
           </div>
         </div>
 
@@ -538,7 +616,7 @@
 
       <!-- Form Footer with Submit Button -->
       <div class="bg-gray-50 px-6 sm:px-8 py-4 border-t border-gray-200 flex flex-col sm:flex-row justify-between items-center gap-4">
-        <a href="{{ url('view_stock') }}" 
+        <a href="{{ url('view_stock') }}{{ isset($returnPage) && $returnPage > 1 ? '?page=' . $returnPage : '' }}" 
            class="text-sm text-gray-600 hover:text-gray-800 transition-colors">
           {{ trans('messages.cancel', [], session('locale')) }}
         </a>

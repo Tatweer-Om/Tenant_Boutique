@@ -32,11 +32,26 @@
 
       <div class="flex justify-end gap-3">
         <button @click="showConfirmModal=false"
-                class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-xl">{{ trans('messages.cancel', [], session('locale')) }}</button>
+                :disabled="isReceiving"
+                :class="isReceiving 
+                  ? 'px-4 py-2 bg-gray-300 cursor-not-allowed rounded-xl opacity-50'
+                  : 'px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-xl'">
+          {{ trans('messages.cancel', [], session('locale')) }}
+        </button>
 
         <button @click="confirmReceive()"
-                class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl">
-          {{ trans('messages.confirm', [], session('locale')) }}
+                :disabled="isReceiving"
+                :class="isReceiving 
+                  ? 'px-4 py-2 bg-gray-400 cursor-not-allowed text-white rounded-xl opacity-75'
+                  : 'px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl'">
+          <span x-show="!isReceiving">{{ trans('messages.confirm', [], session('locale')) }}</span>
+          <span x-show="isReceiving" class="flex items-center gap-2">
+            <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            {{ trans('messages.processing', [], session('locale')) ?: 'Processing...' }}
+          </span>
         </button>
       </div>
     </div>
@@ -56,25 +71,40 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
         <!-- صورة العباية -->
-        <div>
-          <img :src="selectedItem.image" class="w-full rounded-xl border object-cover shadow">
+        <div class="flex items-center justify-center">
+          <img :src="selectedItem.image" class="max-w-full max-h-80 w-auto h-auto rounded-xl border object-contain shadow-lg">
         </div>
 
         <div class="space-y-2 text-sm">
 
+          <div><strong>{{ trans('messages.abaya', [], session('locale')) }}:</strong> <span x-text="selectedItem.abayaName || selectedItem.code || 'N/A'"></span></div>
+          <div><strong>{{ trans('messages.code', [], session('locale')) }}:</strong> <span x-text="selectedItem.code || '—'"></span></div>
           <div><strong>{{ trans('messages.order_number', [], session('locale')) }}:</strong> <span x-text="selectedItem.order_no || ('#' + selectedItem.orderId)"></span></div>
           <div><strong>{{ trans('messages.order_source', [], session('locale')) }}:</strong> <span x-text="selectedItem.source"></span></div>
+          <div><strong>{{ trans('messages.customer', [], session('locale')) }}:</strong> <span x-text="selectedItem.customer || 'N/A'"></span></div>
           <div><strong>{{ trans('messages.order_date', [], session('locale')) }}:</strong> <span x-text="selectedItem.date"></span></div>
           <div><strong>{{ trans('messages.quantity', [], session('locale')) ?: 'Quantity' }}:</strong> <span x-text="selectedItem.quantity || 1"></span></div>
 
-          <div><strong>{{ trans('messages.abaya_length', [], session('locale')) }}:</strong> <span x-text="selectedItem.length"></span></div>
-          <div><strong>{{ trans('messages.bust_one_side', [], session('locale')) }}:</strong> <span x-text="selectedItem.bust"></span></div>
-          <div><strong>{{ trans('messages.sleeves_length', [], session('locale')) }}:</strong> <span x-text="selectedItem.sleeves"></span></div>
+          <!-- Show color and size for stock orders -->
+          <template x-if="selectedItem.is_stock_order && selectedItem.color_name">
+            <div><strong>{{ trans('messages.color', [], session('locale')) }}:</strong> <span x-text="selectedItem.color_name"></span></div>
+          </template>
+          <template x-if="selectedItem.is_stock_order && selectedItem.size_name">
+            <div><strong>{{ trans('messages.size', [], session('locale')) }}:</strong> <span x-text="selectedItem.size_name"></span></div>
+          </template>
 
-          <div><strong>{{ trans('messages.buttons', [], session('locale')) }}:</strong> <span x-text="selectedItem.buttons ? '{{ trans('messages.yes', [], session('locale')) }}' : '{{ trans('messages.no', [], session('locale')) }}'"></span></div>
+          <!-- Show measurements for customer orders -->
+          <template x-if="!selectedItem.is_stock_order">
+            <div>
+              <div><strong>{{ trans('messages.abaya_length', [], session('locale')) }}:</strong> <span x-text="selectedItem.length || '—'"></span></div>
+              <div><strong>{{ trans('messages.bust_one_side', [], session('locale')) }}:</strong> <span x-text="selectedItem.bust || '—'"></span></div>
+              <div><strong>{{ trans('messages.sleeves_length', [], session('locale')) }}:</strong> <span x-text="selectedItem.sleeves || '—'"></span></div>
+              <div><strong>{{ trans('messages.buttons', [], session('locale')) }}:</strong> <span x-text="selectedItem.buttons ? '{{ trans('messages.yes', [], session('locale')) }}' : '{{ trans('messages.no', [], session('locale')) }}'"></span></div>
+            </div>
+          </template>
 
-          <div><strong>{{ trans('messages.original_tailor', [], session('locale')) }}:</strong> <span x-text="selectedItem.originalTailor"></span></div>
-          <div><strong>{{ trans('messages.current_tailor', [], session('locale')) }}:</strong> <span x-text="selectedItem.tailor"></span></div>
+          <div><strong>{{ trans('messages.original_tailor', [], session('locale')) }}:</strong> <span x-text="selectedItem.originalTailor || '—'"></span></div>
+          <div><strong>{{ trans('messages.current_tailor', [], session('locale')) }}:</strong> <span x-text="selectedItem.tailor || '—'"></span></div>
 
         </div>
 
@@ -146,10 +176,26 @@
                   <span class="font-semibold" x-text="i.quantity || 1"></span>
                 </td>
                 <td class="p-2 border">
-                  {{ trans('messages.abaya_length', [], session('locale')) }}: <span x-text="i.length"></span><br>
-                  {{ trans('messages.bust_one_side', [], session('locale')) }}: <span x-text="i.bust"></span><br>
-                  {{ trans('messages.sleeves_length', [], session('locale')) }}: <span x-text="i.sleeves"></span><br>
-                  {{ trans('messages.buttons', [], session('locale')) }}: <span x-text="i.buttons ? '{{ trans('messages.yes', [], session('locale')) }}' : '{{ trans('messages.no', [], session('locale')) }}'"></span>
+                  <!-- Show color and size for stock orders -->
+                  <template x-if="i.is_stock_order && (i.color_name || i.size_name)">
+                    <div>
+                      <template x-if="i.color_name">
+                        <div>{{ trans('messages.color', [], session('locale')) }}: <span x-text="i.color_name"></span></div>
+                      </template>
+                      <template x-if="i.size_name">
+                        <div>{{ trans('messages.size', [], session('locale')) }}: <span x-text="i.size_name"></span></div>
+                      </template>
+                    </div>
+                  </template>
+                  <!-- Show measurements for customer orders -->
+                  <template x-if="!i.is_stock_order">
+                    <div>
+                      {{ trans('messages.abaya_length', [], session('locale')) }}: <span x-text="i.length || '—'"></span><br>
+                      {{ trans('messages.bust_one_side', [], session('locale')) }}: <span x-text="i.bust || '—'"></span><br>
+                      {{ trans('messages.sleeves_length', [], session('locale')) }}: <span x-text="i.sleeves || '—'"></span><br>
+                      {{ trans('messages.buttons', [], session('locale')) }}: <span x-text="i.buttons ? '{{ trans('messages.yes', [], session('locale')) }}' : '{{ trans('messages.no', [], session('locale')) }}'"></span>
+                    </div>
+                  </template>
                 </td>
                 <td class="p-2 border" x-text="i.tailor_name || i.tailor || tailorNameById(i.tailor_id) || '—'"></td>
                 <td class="p-2 border" x-text="i.notes || '—'"></td>
@@ -279,26 +325,23 @@
                 </td>
 
                 <!-- order no -->
-                <td class="py-3 px-4 font-medium text-indigo-600" x-text="item.order_no || ('#' + item.orderId)"></td>
+                <td class="py-3 px-4 font-medium text-indigo-600">
+                  <div x-text="item.tailor_order_no && item.tailor_order_no !== '—' ? item.tailor_order_no : '—'"></div>
+                  <div class="text-xs text-gray-500 mt-0.5" x-show="item.special_order_no && item.special_order_no !== '—'">
+                    <span>{{ trans('messages.special_order', [], session('locale')) }}:</span>
+                    <span x-text="item.special_order_no"></span>
+                  </div>
+                </td>
 
                 <!-- customer -->
                 <td class="py-3 px-4" x-text="item.customer"></td>
 
                 <!-- abaya -->
-                <td class="py-3 px-4">
-                  <div class="flex items-center gap-2">
-                    <img :src="item.image" class="w-12 h-12 rounded-lg border object-cover">
-                    <div class="flex-1">
-                      <div class="flex items-center gap-2">
-                        <div class="font-semibold" x-text="item.abayaName"></div>
-                        <button @click="openDetails(item)" 
-                                class="text-indigo-600 hover:text-indigo-800">
-                          <span class="material-symbols-outlined text-base">visibility</span>
-                        </button>
-                      </div>
-                      <div class="text-xs text-gray-500" x-text="'{{ trans('messages.code', [], session('locale')) }}: ' + item.code"></div>
-                    </div>
-                  </div>
+                <td class="py-3 px-4 text-center">
+                  <button @click="openDetails(item)" 
+                          class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-700 transition-all duration-200 shadow-sm hover:shadow-md">
+                    <span class="material-symbols-outlined text-lg">visibility</span>
+                  </button>
                 </td>
 
                 <!-- quantity -->
@@ -403,7 +446,6 @@
               <th class="py-3 px-4 text-right">{{ trans('messages.customer', [], session('locale')) }}</th>
               <th class="py-3 px-4 text-right">{{ trans('messages.abaya', [], session('locale')) }}</th>
               <th class="py-3 px-4 text-right">{{ trans('messages.quantity', [], session('locale')) ?: 'Quantity' }}</th>
-              <th class="py-3 px-4 text-right">{{ trans('messages.sizes', [], session('locale')) }}</th>
               <th class="py-3 px-4 text-right">{{ trans('messages.tailor', [], session('locale')) }}</th>
               <th class="py-3 px-4 text-right">{{ trans('messages.status', [], session('locale')) }}</th>
               <th class="py-3 px-4 text-right">{{ trans('messages.ago', [], session('locale')) }}</th>
@@ -425,33 +467,15 @@
 
                 <td class="py-3 px-4" x-text="item.customer"></td>
 
-                <td class="py-3 px-4">
-                  <div class="flex items-center gap-2">
-                    <img :src="item.image" class="w-12 h-12 rounded-lg border object-cover">
-                    <div class="flex-1">
-                      <div class="flex items-center gap-2">
-                        <div class="font-semibold" x-text="item.abayaName"></div>
-                        <button @click="openDetails(item)" 
-                                class="text-indigo-600 hover:text-indigo-800">
-                          <span class="material-symbols-outlined text-base">visibility</span>
-                        </button>
-                      </div>
-                      <div class="text-xs text-gray-500" x-text="'{{ trans('messages.code', [], session('locale')) }}: ' + item.code"></div>
-                    </div>
-                  </div>
+                <td class="py-3 px-4 text-center">
+                  <button @click="openDetails(item)" 
+                          class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-700 transition-all duration-200 shadow-sm hover:shadow-md">
+                    <span class="material-symbols-outlined text-lg">visibility</span>
+                  </button>
                 </td>
 
                 <td class="py-3 px-4 text-center">
                   <span class="font-semibold text-indigo-600" x-text="item.quantity || 1"></span>
-                </td>
-
-                <td class="py-3 px-4">
-                  <div class="text-xs leading-5">
-                    <div>{{ trans('messages.abaya_length', [], session('locale')) }}: <span x-text="item.length"></span></div>
-                    <div>{{ trans('messages.bust_one_side', [], session('locale')) }}: <span x-text="item.bust"></span></div>
-                    <div>{{ trans('messages.sleeves_length', [], session('locale')) }}: <span x-text="item.sleeves"></span></div>
-                    <div>{{ trans('messages.buttons', [], session('locale')) }}: <span x-text="item.buttons ? '{{ trans('messages.yes', [], session('locale')) }}' : '{{ trans('messages.no', [], session('locale')) }}'"></span></div>
-                  </div>
                 </td>
 
                 <td class="py-3 px-4">
@@ -480,7 +504,7 @@
             </template>
 
             <tr x-show="filteredAbayas().length === 0">
-              <td colspan="9" class="text-center py-6 text-gray-400">
+              <td colspan="8" class="text-center py-6 text-gray-400">
                 {{ trans('messages.no_matching_abayas', [], session('locale')) }}
               </td>
             </tr>

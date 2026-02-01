@@ -17,6 +17,7 @@ class StockHistory extends Model
         'changed_qty',
         'new_qty',
         'action_type',
+        'tailor_id',
         'pull_notes',
         'user_id',
         'added_by',
@@ -31,6 +32,16 @@ class StockHistory extends Model
     public function color()
     {
         return $this->belongsTo(Color::class, 'color_id');
+    }
+    
+    public function tailor()
+    {
+        return $this->belongsTo(Tailor::class, 'tailor_id');
+    }
+    
+    public function stock()
+    {
+        return $this->belongsTo(Stock::class, 'stock_id');
     }
 
 }

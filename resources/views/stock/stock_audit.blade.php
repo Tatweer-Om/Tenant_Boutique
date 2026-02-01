@@ -6,7 +6,7 @@
 @endpush
 
 <main class="flex-1 p-8 bg-background-light dark:bg-background-dark overflow-y-auto">
-    <div class="max-w-7xl mx-auto">
+    <div class="max-w-[95%] mx-auto">
         <!-- Page title -->
         <div class="mb-6">
             <h2 class="text-2xl sm:text-4xl font-bold text-[var(--text-primary)]">

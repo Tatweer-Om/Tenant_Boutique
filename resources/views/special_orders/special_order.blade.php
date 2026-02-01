@@ -7,8 +7,26 @@
 
 <main class="flex-1 p-4 md:p-6" x-data="tailorApp">
 
-  <!-- 🧍 بيانات العميل -->
-  <div class="bg-white shadow rounded-2xl p-5 mb-6 border border-gray-100">
+  <!-- Tabs -->
+  <div class="bg-white rounded-2xl shadow-md p-4 mb-6">
+    <div class="flex gap-3 border-b border-gray-200 overflow-x-auto no-scrollbar">
+      <button @click="activeMainTab = 'customer'"
+              :class="activeMainTab === 'customer' ? 'text-[var(--primary-color)] border-b-2 border-[var(--primary-color)] font-bold' : 'text-gray-600'"
+              class="py-3 px-4 flex items-center gap-1 whitespace-nowrap">
+        <span class="material-symbols-outlined text-base">person</span> {{ trans('messages.customer_special_order', [], session('locale')) }}
+      </button>
+      <button @click="activeMainTab = 'stock'"
+              :class="activeMainTab === 'stock' ? 'text-[var(--primary-color)] border-b-2 border-[var(--primary-color)] font-bold' : 'text-gray-600'"
+              class="py-3 px-4 flex items-center gap-1 whitespace-nowrap">
+        <span class="material-symbols-outlined text-base">inventory_2</span> {{ trans('messages.stock_special_order', [], session('locale')) }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Customer Tab -->
+  <div x-show="activeMainTab === 'customer'" x-transition>
+    <!-- 🧍 بيانات العميل -->
+    <div class="bg-white shadow rounded-2xl p-5 mb-6 border border-gray-100">
     <h1 class="text-xl font-bold mb-4">{{ trans('messages.customer_data', [], session('locale')) }}</h1>
 
     <div class="grid md:grid-cols-2 gap-4">
@@ -104,8 +122,13 @@
       </div>
     </div>
   </div>
+  </div>
 
-  <!-- 👗 الطلبات -->
+  <!-- Stock Tab -->
+  <div x-show="activeMainTab === 'stock'" x-transition>
+  </div>
+
+  <!-- 👗 الطلبات (Shared between both tabs) -->
   <template x-for="(order, index) in orders" :key="order.id">
     <section :id="'order-' + order.id" class="bg-white shadow-md rounded-2xl p-5 border border-gray-100 mb-6" x-data="abayaSelector(order)">
       <div class="flex justify-between items-center mb-4">
@@ -176,7 +199,7 @@
 </div>
 
 
-        <div>
+        <div x-show="activeMainTab === 'customer'">
           <label class="block text-sm font-medium mb-1">{{ trans('messages.quantity', [], session('locale')) }}</label>
           <input type="number" min="1" x-model="order.quantity" data-validate="quantity" @keydown="validateQuantityInput($event)" @paste="cleanQuantityOnPaste($event)" class="form-input w-full border-gray-300 rounded-lg">
         </div>
@@ -192,8 +215,8 @@
         </div>
       </div>
 
-      <!-- المقاسات -->
-      <div class="border-t pt-4 mt-4">
+      <!-- Customer Tab: المقاسات -->
+      <div x-show="activeMainTab === 'customer'" class="border-t pt-4 mt-4">
         <h3 class="font-semibold mb-2">{{ trans('messages.sizes_inches', [], session('locale')) }}</h3>
         <div class="grid md:grid-cols-3 gap-4">
           <div><label class="block text-sm mb-1">{{ trans('messages.abaya_length', [], session('locale')) }}</label><input type="number" x-model="order.length" class="form-input w-full border-gray-300 rounded-lg"></div>
@@ -208,6 +231,121 @@
           </div>
         </div>
       </div>
+
+      <!-- Stock Tab: By Color and Size -->
+      <div x-show="activeMainTab === 'stock'" 
+           class="border-t pt-4 mt-4"
+           x-data="{
+             availableColors: [
+               @foreach($colors as $c)
+                 { id: {{ $c->id }}, name: '{{ session('locale') == 'ar' ? $c->color_name_ar : $c->color_name_en }}', color_code: '{{ $c->color_code }}' },
+               @endforeach
+             ],
+             availableSizes: [
+               @foreach($sizes as $s)
+                 { id: {{ $s->id }}, name: '{{ session('locale') == 'ar' ? $s->size_name_ar : $s->size_name_en }}' },
+               @endforeach
+             ],
+             checkAndMergeDuplicate(orderObj, currentIndex) {
+               if (!orderObj.colorSizes || !orderObj.colorSizes[currentIndex]) return;
+               const currentItem = orderObj.colorSizes[currentIndex];
+               if (!currentItem.color_id || !currentItem.size_id) return;
+               for (let i = 0; i < orderObj.colorSizes.length; i++) {
+                 if (i === currentIndex) continue;
+                 const otherItem = orderObj.colorSizes[i];
+                 if (otherItem && otherItem.color_id == currentItem.color_id && otherItem.size_id == currentItem.size_id) {
+                   const currentQty = parseInt(currentItem.qty) || 0;
+                   const otherQty = parseInt(otherItem.qty) || 0;
+                   otherItem.qty = currentQty + otherQty;
+                   orderObj.colorSizes.splice(currentIndex, 1);
+                   if (typeof show_notification !== 'undefined') {
+                     show_notification('success', '{{ trans('messages.quantity_merged', [], session('locale')) ?: 'Quantity merged with existing color/size combination' }}');
+                   }
+                   return;
+                 }
+               }
+             },
+             addColorSizeRow(orderObj) {
+               const hasEmptyRow = orderObj.colorSizes && orderObj.colorSizes.some(item => !item.color_id && !item.size_id);
+               if (!hasEmptyRow) {
+                 if (!orderObj.colorSizes) orderObj.colorSizes = [];
+                 orderObj.colorSizes.push({ color_id: '', size_id: '', qty: 1 });
+               }
+             }
+           }">
+        <h3 class="font-semibold mb-4">{{ trans('messages.by_color_and_size', [], session('locale')) ?: 'By Color and Size' }}</h3>
+        
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm border border-gray-200 rounded-lg">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-4 py-2 border text-right">{{ trans('messages.color', [], session('locale')) }}</th>
+                <th class="px-4 py-2 border text-right">{{ trans('messages.size', [], session('locale')) }}</th>
+                <th class="px-4 py-2 border text-right">{{ trans('messages.quantity', [], session('locale')) }}</th>
+                <th class="px-4 py-2 border text-center">{{ trans('messages.action', [], session('locale')) }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="(item, index) in order.colorSizes" :key="index">
+                <tr>
+                  <td class="px-4 py-2 border">
+                    <select class="h-10 w-full rounded-lg px-3 border border-gray-300 text-sm focus:ring-2 focus:ring-primary/50"
+                            x-model="item.color_id"
+                            @change="item.color_id = Number($event.target.value); $nextTick(() => checkAndMergeDuplicate(order, index))">
+                      <option value="">{{ trans('messages.select_color', [], session('locale')) ?: 'Select Color' }}</option>
+                      <template x-for="c in availableColors" :key="c.id">
+                        <option :value="c.id" x-text="c.name"></option>
+                      </template>
+                    </select>
+                  </td>
+                  <td class="border px-4 py-2">
+                    <select class="h-10 w-full rounded-lg px-3 border border-gray-300 text-sm focus:ring-2 focus:ring-primary/50"
+                            x-model="item.size_id"
+                            @change="item.size_id = Number($event.target.value); $nextTick(() => checkAndMergeDuplicate(order, index))">
+                      <option value="">{{ trans('messages.select_size', [], session('locale')) ?: 'Select Size' }}</option>
+                      <template x-for="s in availableSizes" :key="s.id">
+                        <option :value="s.id" x-text="s.name"></option>
+                      </template>
+                    </select>
+                  </td>
+                  <td class="border px-4 py-2">
+                    <input type="number"
+                           data-validate="quantity"
+                           @keydown="validateQuantityInput($event)"
+                           @paste="cleanQuantityOnPaste($event)"
+                           class="w-24 h-10 text-center border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/50"
+                           x-model="item.qty"
+                           placeholder="0"
+                           min="1">
+                  </td>
+                  <td class="border px-4 py-2 text-center">
+                    <button type="button" 
+                            @click="order.colorSizes.splice(index, 1)" 
+                            class="text-red-500 hover:text-red-700 transition">
+                      <span class="material-symbols-outlined text-lg">delete</span>
+                    </button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mt-4 flex gap-3 items-center">
+          <button type="button" 
+                  @click="addColorSizeRow(order)" 
+                  class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 flex items-center gap-1 text-sm transition">
+            <span class="material-symbols-outlined text-sm">add</span> 
+            {{ trans('messages.add_color_size', [], session('locale')) ?: 'Add Color & Size' }}
+          </button>
+        </div>
+
+        <!-- Notes for Stock Tab -->
+        <div class="mt-4">
+          <label class="block text-sm font-medium mb-1">{{ trans('messages.notes', [], session('locale')) }}</label>
+          <textarea x-model="order.notes" class="form-textarea w-full border-gray-300 rounded-lg" rows="2"></textarea>
+        </div>
+      </div>
     </section>
   </template>
 
@@ -220,7 +358,10 @@
 
   <!-- زر الحفظ -->
   <div class="text-center">
-    <button @click="openPaymentModal" class="bg-green-600 text-white px-8 py-3 rounded-xl hover:bg-green-700">
+    <button @click="openPaymentModal"
+            :disabled="loading"
+            class="text-white px-8 py-3 rounded-xl"
+            :class="loading ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'">
       {{ trans('messages.confirm_order_and_calculate', [], session('locale')) }}
     </button>
   </div>
@@ -283,7 +424,7 @@
                 <h4 class="font-semibold text-lg">{{ trans('messages.abaya_number', [], session('locale')) }} <span x-text="i+1"></span></h4>
                 <div class="text-right">
                   <div class="text-sm text-gray-600">{{ trans('messages.subtotal', [], session('locale')) ?: 'Subtotal' }}:</div>
-                  <div class="font-bold text-indigo-600" x-text="(order.price * order.quantity).toFixed(3) + ' ر.ع'"></div>
+                  <div class="font-bold text-indigo-600" x-text="(activeMainTab === 'stock' ? (order.colorSizes ? order.colorSizes.reduce((sum, cs) => sum + (parseInt(cs.qty) || 0), 0) * order.price : 0) : (order.price * order.quantity)).toFixed(3) + ' ر.ع'"></div>
                 </div>
               </div>
               
@@ -298,13 +439,34 @@
                 </div>
                 <div>
                   <span class="text-gray-600">{{ trans('messages.quantity', [], session('locale')) }}:</span>
-                  <strong class="ml-2" x-text="order.quantity || 1"></strong>
+                  <strong class="ml-2" x-text="activeMainTab === 'stock' ? (order.colorSizes ? order.colorSizes.reduce((sum, cs) => sum + (parseInt(cs.qty) || 0), 0) : 0) : (order.quantity || 1)"></strong>
                 </div>
                 <div>
                   <span class="text-gray-600">{{ trans('messages.price', [], session('locale')) }}:</span>
                   <strong class="ml-2" x-text="order.price.toFixed(3) + ' ر.ع'"></strong>
                 </div>
-                <template x-if="order.length || order.bust || order.sleeves">
+                
+                <!-- Stock Tab: Show Color/Size combinations -->
+                <template x-if="activeMainTab === 'stock' && order.colorSizes && order.colorSizes.length > 0">
+                  <div class="md:col-span-2 border-t pt-2 mt-2">
+                    <div class="text-gray-600 mb-2 font-semibold">{{ trans('messages.color_size_breakdown', [], session('locale')) ?: 'Color & Size Breakdown' }}:</div>
+                    <div class="space-y-2">
+                      <template x-for="(cs, idx) in order.colorSizes" :key="idx">
+                        <div class="flex items-center gap-3 text-sm bg-gray-50 p-2 rounded">
+                          <span class="text-gray-600">{{ trans('messages.color', [], session('locale')) }}:</span>
+                          <strong x-text="availableColors.find(c => c.id == cs.color_id)?.name || '—'"></strong>
+                          <span class="text-gray-600">{{ trans('messages.size', [], session('locale')) }}:</span>
+                          <strong x-text="availableSizes.find(s => s.id == cs.size_id)?.name || '—'"></strong>
+                          <span class="text-gray-600">{{ trans('messages.quantity', [], session('locale')) }}:</span>
+                          <strong class="text-indigo-600" x-text="parseInt(cs.qty) || 0"></strong>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                </template>
+                
+                <!-- Customer Tab: Show measurements -->
+                <template x-if="activeMainTab === 'customer' && (order.length || order.bust || order.sleeves)">
                   <div class="md:col-span-2 border-t pt-2 mt-2">
                     <div class="text-gray-600 mb-1">{{ trans('messages.sizes', [], session('locale')) }}:</div>
                     <div class="flex flex-wrap gap-3 text-sm">
@@ -389,8 +551,7 @@
   <!-- Payment Modal -->
   <div x-show="showPaymentModal" x-transition.opacity
        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-    <div @click.away="showPaymentModal=false"
-         x-transition.scale
+    <div x-transition.scale
          class="bg-white w-full max-w-md mx-4 rounded-2xl shadow-2xl p-6">
 
       <h2 class="text-xl font-bold mb-4">{{ trans('messages.record_payment', [], session('locale')) }}</h2>

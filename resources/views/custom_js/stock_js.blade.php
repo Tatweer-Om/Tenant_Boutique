@@ -1,5 +1,27 @@
 <script>
 $(document).ready(function() {
+    // Prevent negative values in price inputs
+    $('#cost_price, #sales_price, #tailor_charges, #notification_limit').on('input blur', function() {
+        const value = parseFloat($(this).val());
+        if (value < 0 || isNaN(value)) {
+            $(this).val(0);
+        }
+    });
+
+    // Prevent decimal values in quantity inputs (enforce integers only)
+    $(document).on('input', 'input[data-validate="quantity"]', function() {
+        let value = $(this).val();
+        // Remove any decimal points or non-numeric characters
+        value = value.replace(/[^\d]/g, '');
+        // Ensure it's a positive integer
+        const intValue = Math.max(0, parseInt(value) || 0);
+        $(this).val(intValue);
+        // Update Alpine.js model if it exists
+        if (this._x_model && this._x_model.set) {
+            this._x_model.set(intValue);
+        }
+    });
+
     $('#add_material').on('submit', function(e) {
         e.preventDefault();
 
@@ -75,25 +97,78 @@ $(document).ready(function() {
 
     let abaya_code = $('#abaya_code').val().trim();
     let barcode = $('#barcode').val().trim();
-    let design_name = $('#design_name').val();
-let tailor = $('input[name="tailor_id[]"]:checked').map(function() {
-    return $(this).val();
-}).get();
+    let design_name = $('#design_name').val().trim();
+    let category_id = $('#category_id').val();
+    let tailor_id = $('#tailor_id').val();
+    let cost_price = $('#cost_price').val();
+    let sales_price = $('#sales_price').val();
+    let tailor_charges = $('#tailor_charges').val();
 
+    // Validate all required fields
     if (!abaya_code) {
-        show_notification('error', '<?= trans("messages.enter_abaya_code", [], session("locale")) ?>');
+        show_notification('error', '<?= trans("messages.enter_abaya_code", [], session("locale")) ?: "Please enter abaya code" ?>');
         return;
     }
     if (!barcode) {
-        show_notification('error', '<?= trans("messages.enter_barcode", [], session("locale")) ?>');
+        show_notification('error', '<?= trans("messages.enter_barcode", [], session("locale")) ?: "Please enter barcode" ?>');
         return;
     }
     if (!design_name) {
-        show_notification('error', '<?= trans("messages.enter_design_name", [], session("locale")) ?>');
+        show_notification('error', '<?= trans("messages.enter_design_name", [], session("locale")) ?: "Please enter design name" ?>');
         return;
     }
-    if (!tailor) {
-        show_notification('error', '<?= trans("messages.enter_tailor", [], session("locale")) ?>');
+    if (!category_id) {
+        show_notification('error', '<?= trans("messages.enter_category", [], session("locale")) ?: "Please select a category" ?>');
+        return;
+    }
+    if (!tailor_id) {
+        show_notification('error', '<?= trans("messages.enter_tailor", [], session("locale")) ?: "Please select a tailor" ?>');
+        return;
+    }
+    if (!cost_price || parseFloat(cost_price) < 0) {
+        show_notification('error', '<?= trans("messages.enter_cost_price", [], session("locale")) ?: "Please enter cost price" ?>');
+        return;
+    }
+    if (!sales_price || parseFloat(sales_price) < 0) {
+        show_notification('error', '<?= trans("messages.enter_sales_price", [], session("locale")) ?: "Please enter sales price" ?>');
+        return;
+    }
+    if (!tailor_charges || parseFloat(tailor_charges) < 0) {
+        show_notification('error', '<?= trans("messages.enter_tailor_charges", [], session("locale")) ?: "Please enter tailor charges" ?>');
+        return;
+    }
+
+    // Validate at least one color and size combination is selected
+    let hasColorSize = false;
+    $('input[name^="color_sizes["]').each(function() {
+        let name = $(this).attr('name');
+        // Check if this is a qty field (format: color_sizes[color_id][size_id][qty])
+        if (name && name.includes('[qty]')) {
+            let qty = parseFloat($(this).val()) || 0;
+            if (qty > 0) {
+                hasColorSize = true;
+                return false; // break loop
+            }
+        }
+    });
+    
+    if (!hasColorSize) {
+        show_notification('error', '<?= trans("messages.enter_color_size", [], session("locale")) ?: "Please add at least one color and size combination" ?>');
+        return;
+    }
+
+    // Validate at least one material is assigned
+    let hasMaterial = false;
+    $('input[name^="abaya_materials"][name$="[quantity]"]').each(function() {
+        let qty = parseFloat($(this).val()) || 0;
+        if (qty > 0) {
+            hasMaterial = true;
+            return false; // break loop
+        }
+    });
+    
+    if (!hasMaterial) {
+        show_notification('error', '<?= trans("messages.at_least_one_material_required", [], session("locale")) ?: "At least one material must be assigned" ?>');
         return;
     }
 
@@ -214,6 +289,43 @@ function imageUploader() {
         }
     };
 }
+
+// Quantity validation functions - prevent decimal/point values
+window.validateQuantityInput = function(event) {
+    // Allow: backspace, delete, tab, escape, enter, home, end, arrow keys
+    if ([8, 9, 27, 13, 46, 35, 36, 37, 38, 39, 40].indexOf(event.keyCode) !== -1 ||
+        // Allow: Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
+        (event.keyCode === 65 && event.ctrlKey === true) ||
+        (event.keyCode === 67 && event.ctrlKey === true) ||
+        (event.keyCode === 86 && event.ctrlKey === true) ||
+        (event.keyCode === 88 && event.ctrlKey === true)) {
+        return;
+    }
+    // Ensure that it is a number and stop the keypress if it's a decimal point
+    if ((event.shiftKey || (event.keyCode < 48 || event.keyCode > 57)) && (event.keyCode < 96 || event.keyCode > 105) && event.keyCode !== 46) {
+        event.preventDefault();
+    }
+    // Prevent decimal point
+    if (event.keyCode === 190 || event.keyCode === 110 || event.keyCode === 188) {
+        event.preventDefault();
+    }
+};
+
+window.cleanQuantityOnPaste = function(event) {
+    event.preventDefault();
+    const pastedText = (event.clipboardData || window.clipboardData).getData('text');
+    // Remove all non-numeric characters except digits
+    const cleaned = pastedText.replace(/[^\d]/g, '');
+    const input = event.target;
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    const currentValue = input.value || '';
+    const newValue = currentValue.substring(0, start) + cleaned + currentValue.substring(end);
+    // Set value and ensure it's a positive integer
+    input.value = Math.max(0, Math.floor(parseInt(newValue) || 0));
+    // Trigger input event to update Alpine.js model
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+};
 
 
 

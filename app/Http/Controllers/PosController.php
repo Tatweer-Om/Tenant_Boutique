@@ -17,6 +17,7 @@ use App\Models\ColorSize;
 use App\Models\Account;
 use App\Models\Channel;
 use App\Models\ChannelStock;
+use App\Models\StockAuditLog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
@@ -372,11 +373,12 @@ class PosController extends Controller
 
             // Fetch stock cost and tailor charges
             $stock = Stock::find($item['id']);
-            $stockQty = max(1, (float)($stock->quantity ?? 1));
-            $unitTailor = ($stock->tailor_charges ?? 0) / $stockQty;
-            $unitCost = ($stock->cost_price ?? 0) + $unitTailor;
-
-            $itemProfit = ($unitEffectivePrice - $unitCost) * $qty;
+            $unitCostPrice = (float)($stock->cost_price ?? 0);
+            $unitTailorCharges = (float)($stock->tailor_charges ?? 0);
+            
+            // Profit calculation: (Effective Price - Cost Price - Tailor Charges) × Quantity
+            // Tailor charges are per unit, so if tailor charges = 5 and qty = 5, total tailor = 25
+            $itemProfit = ($unitEffectivePrice - $unitCostPrice - $unitTailorCharges) * $qty;
             $totalProfit += $itemProfit;
 
             // Handle color_id and size_id - convert to int or null
@@ -426,6 +428,26 @@ class PosController extends Controller
                     $stockTotalQty = ColorSize::where('stock_id', $item['id'])->sum('qty');
                     $stock->quantity = $stockTotalQty;
                     $stock->save();
+
+                    // Log audit entry for POS sale
+                    StockAuditLog::create([
+                        'stock_id' => $stock->id,
+                        'abaya_code' => $stock->abaya_code,
+                        'barcode' => $stock->barcode,
+                        'design_name' => $stock->design_name,
+                        'operation_type' => 'sold',
+                        'previous_quantity' => $currentQty,
+                        'new_quantity' => $newQty,
+                        'quantity_change' => -$qty,
+                        'related_id' => $orderNoFormatted,
+                        'related_type' => 'pos_order',
+                        'related_info' => ['order_id' => $order->id, 'customer_id' => $customerId],
+                        'color_id' => $colorId,
+                        'size_id' => $sizeId,
+                        'user_id' => $userId,
+                        'added_by' => $userName,
+                        'notes' => 'Sold via POS',
+                    ]);
                 }
                 
                 // If channel is selected, also reduce ChannelStock quantity
@@ -750,7 +772,7 @@ class PosController extends Controller
         
         // Get order details with formatted data
         $orderDetails = $order->details->map(function($detail) {
-            $locale = session('locale', 'ar');
+            $locale = session('locale', 'en');
             $stock = $detail->stock;
             
             $colorName = $detail->color ? 
@@ -879,5 +901,81 @@ class PosController extends Controller
             // Check if any color+size combination has quantity > 0
             return $stock->colorSizes->sum('qty') > 0;
         }
+    }
+    
+      /**
+     * Get shipping_fee from API for POS delivery orders. Called before submit.
+     * No order is saved. Uses get_shipping_fee_for_pos_order helper.
+     */
+    public function getShippingFee(Request $request)
+    {
+        $orderType = $request->input('order_type', 'direct');
+        if ($orderType !== 'delivery') {
+            return response()->json(['success' => true, 'shipping_fee' => 0]);
+        }
+
+        $items = $request->input('items', []);
+        $customerInput = $request->input('customer', []);
+        $areaId = !empty($customerInput['area']) ? (int) $customerInput['area'] : null;
+        $cityId = !empty($customerInput['wilayah']) ? (int) $customerInput['wilayah'] : null;
+
+        if (!$areaId || !$cityId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Area and city are required for delivery shipping fee',
+            ], 422);
+        }
+
+        if (empty($customerInput['phone']) && empty($customerInput['name'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Customer phone or name is required for delivery',
+            ], 422);
+        }
+
+        $addressNotes = $customerInput['address'] ?? null;
+        $phone = $customerInput['phone'] ?? '';
+        if (!empty($customerInput['phone'])) {
+            $customer = Customer::firstOrCreate(
+                ['phone' => $customerInput['phone']],
+                [
+                    'name' => $customerInput['name'] ?? '',
+                    'city_id' => $cityId,
+                    'area_id' => $areaId,
+                    'notes' => $addressNotes,
+                ]
+            );
+        } else {
+            $customer = Customer::create([
+                'name' => $customerInput['name'] ?? '',
+                'city_id' => $cityId,
+                'area_id' => $areaId,
+                'notes' => $addressNotes,
+            ]);
+        }
+        if (!$customer->wasRecentlyCreated) {
+            $customer->update([
+                'name' => $customerInput['name'] ?? $customer->name,
+                'city_id' => $cityId,
+                'area_id' => $areaId,
+                'notes' => $addressNotes ?? $customer->notes,
+            ]);
+        }
+        $customerId = $customer->id;
+
+        $totalQuantity = (int) collect($items)->sum('qty');
+        $apiFee = get_shipping_fee_for_pos_order($areaId, $cityId, $customerId, $totalQuantity, $phone);
+
+        if ($apiFee === null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Could not fetch shipping fee from API',
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'shipping_fee' => (float) $apiFee,
+        ]);
     }
 }
