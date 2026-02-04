@@ -18,7 +18,7 @@ return new class extends Migration
             $table->string('user_email')->unique();
             $table->string('password');
             $table->longText('notes')->nullable();
-            $table->json('permissions')->nullable();
+            $table->longText('permissions')->nullable();
             $table->string('added_by')->nullable();
             $table->string('user_id')->nullable();
             $table->string('updated_by')->nullable();

@@ -1,5 +1,14 @@
 {
     "User": true,
     "Color": true,
-    "Size": true
+    "Size": true,
+    "Account": true,
+    "Expense": true,
+    "ExpenseCategory": true,
+    "StockCategory": true,
+    "Stock": true,
+    "Pos": true,
+    "Area": true,
+    "City": true,
+    "Customer": true
 }

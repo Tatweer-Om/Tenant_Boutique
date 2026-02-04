@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Auth;
 
 class UserController extends Controller
 {
-  public function index()
+     public function index()
     {
         if (!Auth::guard('tenant')->check()) {
             return redirect()->route('tlogin_page')->with('error', 'Please login first');
@@ -44,7 +44,7 @@ class UserController extends Controller
         $permissions = $request->permissions ?? [];
         $user->permissions = array_map('intval', $permissions);
         $user->added_by = 'system';
-        $user->user_id = auth()->id() ?? 1;
+        $user->user_id = Auth::guard('tenant')->id() ?? 1;
         $user->save();
 
         return response()->json($user);
@@ -134,6 +134,6 @@ class UserController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
         
-        return redirect()->route('login_page')->with('success', 'تم تسجيل الخروج بنجاح');
+        return redirect()->route('tlogin_page')->with('success', 'تم تسجيل الخروج بنجاح');
     }
 }

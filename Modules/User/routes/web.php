@@ -36,9 +36,4 @@ Route::middleware([
     Route::delete('users/{user}', [UserController::class, 'destroy']);
     Route::get('users/list', [UserController::class, 'getusers']);
     Route::get('users/{user}', [UserController::class, 'show']);
-    
-    
-
-     
-
 });

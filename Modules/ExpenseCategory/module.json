@@ -1,0 +1,11 @@
+{
+    "name": "ExpenseCategory",
+    "alias": "expensecategory",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\ExpenseCategory\\Providers\\ExpenseCategoryServiceProvider"
+    ],
+    "files": []
+}
