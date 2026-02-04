@@ -155,7 +155,7 @@ $(document).on('click', '#pagination a', function(e) {
                 $('#color_id').val(color.id);
                 $('#color_name_en').val(color.color_name_en);
                 $('#color_name_ar').val(color.color_name_ar);
-                $('#color_code').val(color.color_code_en);
+                $('#color_code').val(color.color_code);
                 
                 // Open modal using Alpine event
                 window.dispatchEvent(new CustomEvent('open-modal'));
