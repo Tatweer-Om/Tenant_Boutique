@@ -10,5 +10,7 @@
     "Pos": true,
     "Area": true,
     "City": true,
-    "Customer": true
+    "Customer": true,
+    "Setting": true,
+    "Dashboard": true
 }

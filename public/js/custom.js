@@ -106,40 +106,40 @@
     const langMenu = document.getElementById("langMenu");
 
     // Function to update locale in Laravel session
-    function updateLocale(locale) {
-      const csrfToken = document.querySelector('meta[name="csrf-token"]');
-      if (!csrfToken) {
-        console.error("CSRF token not found");
-        // Reload immediately if no CSRF token
-        window.location.reload();
-        return;
-      }
+    // function updateLocale(locale) {
+    //   const csrfToken = document.querySelector('meta[name="csrf-token"]');
+    //   if (!csrfToken) {
+    //     console.error("CSRF token not found");
+    //     // Reload immediately if no CSRF token
+    //     window.location.reload();
+    //     return;
+    //   }
 
-      // Show loading indicator (optional)
-      const body = document.body;
-      body.style.cursor = 'wait';
+    //   // Show loading indicator (optional)
+    //   const body = document.body;
+    //   body.style.cursor = 'wait';
       
-      fetch("/change-locale", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRF-TOKEN": csrfToken.getAttribute('content'),
-          "Accept": "application/json"
-        },
-        body: JSON.stringify({ locale: locale })
-      })
-      .then(response => {
-        // Always reload regardless of response
-        body.style.cursor = 'default';
-        window.location.reload();
-      })
-      .catch(error => {
-        console.error("Error updating locale:", error);
-        body.style.cursor = 'default';
-        // Always reload even if AJAX fails
-        window.location.reload();
-      });
-    }
+    //   fetch("/change-locale", {
+    //     method: "POST",
+    //     headers: {
+    //       "Content-Type": "application/json",
+    //       "X-CSRF-TOKEN": csrfToken.getAttribute('content'),
+    //       "Accept": "application/json"
+    //     },
+    //     body: JSON.stringify({ locale: locale })
+    //   })
+    //   .then(response => {
+    //     // Always reload regardless of response
+    //     body.style.cursor = 'default';
+    //     window.location.reload();
+    //   })
+    //   .catch(error => {
+    //     console.error("Error updating locale:", error);
+    //     body.style.cursor = 'default';
+    //     // Always reload even if AJAX fails
+    //     window.location.reload();
+    //   });
+    // }
 
     // Core: set language + direction + flag + persist + update session
     function setLang(code, reloadPage = true) {
