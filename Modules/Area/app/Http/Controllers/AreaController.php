@@ -14,7 +14,7 @@ class AreaController extends Controller
         if (!Auth::guard('tenant')->check()) {
             return redirect()->route('tlogin_page')->with('error', 'Please login first');
         }
-
+// hahah
         return view('area::area');
     }
 
