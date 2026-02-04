@@ -1,0 +1,11 @@
+{
+    "name": "StockCategory",
+    "alias": "stockcategory",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\StockCategory\\Providers\\StockCategoryServiceProvider"
+    ],
+    "files": []
+}

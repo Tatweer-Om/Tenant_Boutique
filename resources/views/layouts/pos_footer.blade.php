@@ -13,7 +13,7 @@
 
  
     
-            @if ($route_name == 'pos')
+            @if ($route_name == 'pos' && \Nwidart\Modules\Facades\Module::isEnabled('Pos'))
          @include('custom_js.pos_js')
     @endif
       <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.20/dist/sweetalert2.all.min.js"></script>
