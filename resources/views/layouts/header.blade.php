@@ -221,73 +221,73 @@ function logout() {
 }
 
 // Load notifications
-async function loadNotifications() {
-    try {
-        const response = await fetch('/dashboard/notifications', {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json'
-            }
-        });
+// async function loadNotifications() {
+//     try {
+//         const response = await fetch('/dashboard/notifications', {
+//             method: 'GET',
+//             headers: {
+//                 'Accept': 'application/json'
+//             }
+//         });
         
-        const data = await response.json();
-        const notifList = document.getElementById('notifList');
-        const notifBadge = document.getElementById('notifBadge');
+//         const data = await response.json();
+//         const notifList = document.getElementById('notifList');
+//         const notifBadge = document.getElementById('notifBadge');
         
-        if (data.success && data.notifications && data.notifications.length > 0) {
-            // Update badge
-            if (notifBadge) {
-                notifBadge.textContent = data.count > 99 ? '99+' : data.count;
-                notifBadge.classList.remove('hidden');
-            }
+//         if (data.success && data.notifications && data.notifications.length > 0) {
+//             // Update badge
+//             if (notifBadge) {
+//                 notifBadge.textContent = data.count > 99 ? '99+' : data.count;
+//                 notifBadge.classList.remove('hidden');
+//             }
             
-            // Render notifications
-            notifList.innerHTML = data.notifications.map(notif => {
-                return `
-                    <li class="px-3 py-3 hover:bg-secondary/50 dark:hover:bg-primary/10 transition cursor-pointer" onclick="window.location.href='${notif.link}'">
-                        <div class="flex items-start gap-3">
-                            <span class="material-symbols-outlined ${notif.iconColor}">${notif.icon}</span>
-                            <div class="flex-1">
-                                <p class="text-sm font-medium">${notif.title}</p>
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">${notif.message}</p>
-                                ${notif.time ? `<p class="text-xs text-gray-400 dark:text-gray-500 mt-1">${notif.time}</p>` : ''}
-                            </div>
-                        </div>
-                    </li>
-                `;
-            }).join('');
-        } else {
-            // No notifications
-            if (notifBadge) {
-                notifBadge.classList.add('hidden');
-            }
-            notifList.innerHTML = `
-                <li class="px-3 py-4 text-center text-gray-500 text-sm">
-                    {{ trans('messages.no_notifications', [], session('locale')) ?: 'No notifications' }}
-                </li>
-            `;
-        }
-    } catch (error) {
-        console.error('Error loading notifications:', error);
-        const notifList = document.getElementById('notifList');
-        const notifBadge = document.getElementById('notifBadge');
-        if (notifBadge) {
-            notifBadge.classList.add('hidden');
-        }
-        if (notifList) {
-            notifList.innerHTML = `
-                <li class="px-3 py-4 text-center text-red-500 text-sm">
-                    {{ trans('messages.error_loading_data', [], session('locale')) }}
-                </li>
-            `;
-        }
-    }
-}
+//             // Render notifications
+//             notifList.innerHTML = data.notifications.map(notif => {
+//                 return `
+//                     <li class="px-3 py-3 hover:bg-secondary/50 dark:hover:bg-primary/10 transition cursor-pointer" onclick="window.location.href='${notif.link}'">
+//                         <div class="flex items-start gap-3">
+//                             <span class="material-symbols-outlined ${notif.iconColor}">${notif.icon}</span>
+//                             <div class="flex-1">
+//                                 <p class="text-sm font-medium">${notif.title}</p>
+//                                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">${notif.message}</p>
+//                                 ${notif.time ? `<p class="text-xs text-gray-400 dark:text-gray-500 mt-1">${notif.time}</p>` : ''}
+//                             </div>
+//                         </div>
+//                     </li>
+//                 `;
+//             }).join('');
+//         } else {
+//             // No notifications
+//             if (notifBadge) {
+//                 notifBadge.classList.add('hidden');
+//             }
+//             notifList.innerHTML = `
+//                 <li class="px-3 py-4 text-center text-gray-500 text-sm">
+//                     {{ trans('messages.no_notifications', [], session('locale')) ?: 'No notifications' }}
+//                 </li>
+//             `;
+//         }
+//     } catch (error) {
+//         console.error('Error loading notifications:', error);
+//         const notifList = document.getElementById('notifList');
+//         const notifBadge = document.getElementById('notifBadge');
+//         if (notifBadge) {
+//             notifBadge.classList.add('hidden');
+//         }
+//         if (notifList) {
+//             notifList.innerHTML = `
+//                 <li class="px-3 py-4 text-center text-red-500 text-sm">
+//                     {{ trans('messages.error_loading_data', [], session('locale')) }}
+//                 </li>
+//             `;
+//         }
+//     }
+// }
 
 // Load notifications on page load
-document.addEventListener('DOMContentLoaded', function() {
-    loadNotifications();
-    // Refresh notifications every 5 minutes
-    setInterval(loadNotifications, 5 * 60 * 1000);
-});
+// document.addEventListener('DOMContentLoaded', function() {
+//     loadNotifications();
+//     // Refresh notifications every 5 minutes
+//     setInterval(loadNotifications, 5 * 60 * 1000);
+// });
 </script>

@@ -127,22 +127,22 @@ $('#update_abaya').on('submit', function(e) {
 });
 
 
-document.getElementById('material_image').addEventListener('change', function(event) {
-    const file = event.target.files[0];
-    if (!file) return;
+// document.getElementById('material_image').addEventListener('change', function(event) {
+//     const file = event.target.files[0];
+//     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const img = document.getElementById('imagePreview');
-        img.src = e.target.result;
-        img.classList.remove('hidden');
+//     const reader = new FileReader();
+//     reader.onload = function(e) {
+//         const img = document.getElementById('imagePreview');
+//         img.src = e.target.result;
+//         img.classList.remove('hidden');
 
-        // Hide icon and text
-        document.getElementById('uploadIcon').style.display = 'none';
-        document.getElementById('uploadText').style.display = 'none';
-    };
-    reader.readAsDataURL(file);
-});
+//         // Hide icon and text
+//         document.getElementById('uploadIcon').style.display = 'none';
+//         document.getElementById('uploadText').style.display = 'none';
+//     };
+//     reader.readAsDataURL(file);
+// });
 function imageUploader() {
     return {
         images: [],  // preview images

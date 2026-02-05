@@ -1,0 +1,11 @@
+{
+    "name": "ManageQuantity",
+    "alias": "manage_quantity",
+    "description": "Transfer quantities between channels and boutiques",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\ManageQuantity\\Providers\\ManageQuantityServiceProvider"
+    ],
+    "files": []
+}

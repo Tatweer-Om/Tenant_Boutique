@@ -22,4 +22,6 @@ Route::middleware([
     Route::get('get_stock_quantity', [StockController::class, 'get_stock_quantity'])->name('get_stock_quantity');
     Route::get('get_full_stock_details', [StockController::class, 'get_full_stock_details'])->name('get_full_stock_details');
     Route::post('add_quantity', [StockController::class, 'add_quantity'])->name('add_quantity');
+    Route::get('stock/comprehensive-audit', [StockController::class, 'comprehensiveAudit'])->name('stock.comprehensive_audit');
+    Route::get('stock/comprehensive-audit/list', [StockController::class, 'getComprehensiveAudit'])->name('stock.comprehensive_audit.list');
 });

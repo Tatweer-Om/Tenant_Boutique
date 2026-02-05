@@ -10,5 +10,8 @@
     "Pos": true,
     "Area": true,
     "City": true,
-    "Customer": true
+    "Customer": true,
+    "Channel": true,
+    "Boutique": true,
+    "ManageQuantity": true
 }

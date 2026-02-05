@@ -789,6 +789,9 @@ class PosController extends Controller
         }
     }
 
+    /**
+     * Get shipping/delivery fee from city's delivery_charges (no external API).
+     */
     public function getShippingFee(Request $request)
     {
         $orderType = $request->input('order_type', 'direct');
@@ -796,68 +799,22 @@ class PosController extends Controller
             return response()->json(['success' => true, 'shipping_fee' => 0]);
         }
 
-        $items = $request->input('items', []);
         $customerInput = $request->input('customer', []);
-        $areaId = !empty($customerInput['area']) ? (int)$customerInput['area'] : null;
         $cityId = !empty($customerInput['wilayah']) ? (int)$customerInput['wilayah'] : null;
 
-        if (!$areaId || !$cityId) {
+        if (!$cityId) {
             return response()->json([
                 'success' => false,
-                'message' => 'Area and city are required for delivery shipping fee',
+                'message' => 'City (wilayah) is required for delivery shipping fee',
             ], 422);
         }
 
-        if (empty($customerInput['phone']) && empty($customerInput['name'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Customer phone or name is required for delivery',
-            ], 422);
-        }
-
-        $addressNotes = $customerInput['address'] ?? null;
-        $phone = $customerInput['phone'] ?? '';
-        if (!empty($customerInput['phone'])) {
-            $customer = Customer::firstOrCreate(
-                ['phone' => $customerInput['phone']],
-                [
-                    'name' => $customerInput['name'] ?? '',
-                    'city_id' => $cityId,
-                    'area_id' => $areaId,
-                    'notes' => $addressNotes,
-                ]
-            );
-        } else {
-            $customer = Customer::create([
-                'name' => $customerInput['name'] ?? '',
-                'city_id' => $cityId,
-                'area_id' => $areaId,
-                'notes' => $addressNotes,
-            ]);
-        }
-        if (!$customer->wasRecentlyCreated) {
-            $customer->update([
-                'name' => $customerInput['name'] ?? $customer->name,
-                'city_id' => $cityId,
-                'area_id' => $areaId,
-                'notes' => $addressNotes ?? $customer->notes,
-            ]);
-        }
-        $customerId = $customer->id;
-
-        $totalQuantity = (int)collect($items)->sum('qty');
-        $apiFee = get_shipping_fee_for_pos_order($areaId, $cityId, $customerId, $totalQuantity, $phone);
-
-        if ($apiFee === null) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Could not fetch shipping fee from API',
-            ], 422);
-        }
+        $city = City::find($cityId);
+        $deliveryFee = $city ? (float)($city->delivery_charges ?? 0) : 0;
 
         return response()->json([
             'success' => true,
-            'shipping_fee' => (float)$apiFee,
+            'shipping_fee' => $deliveryFee,
         ]);
     }
 }

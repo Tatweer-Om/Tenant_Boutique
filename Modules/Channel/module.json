@@ -1,0 +1,11 @@
+{
+    "name": "Channel",
+    "alias": "channel",
+    "description": "Channel management module for POS",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Channel\\Providers\\ChannelServiceProvider"
+    ],
+    "files": []
+}
