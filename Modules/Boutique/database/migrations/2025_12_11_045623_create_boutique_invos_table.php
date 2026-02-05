@@ -1,0 +1,29 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('boutique_invos', function (Blueprint $table) {
+            $table->id();
+            $table->string('boutique_id')->nullable();
+            $table->string('boutique_name')->nullable();
+            $table->string('month')->nullable();
+            $table->date('payment_date')->nullable();
+            $table->string('status')->nullable();
+            $table->string('total_amount')->nullable();
+            $table->string('added_by')->nullable();
+            $table->integer('user_id')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('boutique_invos');
+    }
+};

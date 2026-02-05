@@ -11,6 +11,10 @@
     "Area": true,
     "City": true,
     "Customer": true,
+    "Channel": true,
+    "Boutique": true,
+    "ManageQuantity": true,
     "Setting": true,
-    "Dashboard": true
+    "Dashboard": true,
+    "Settlement": true
 }

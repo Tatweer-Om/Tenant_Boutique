@@ -7,11 +7,16 @@
 
 <main class="flex-1 p-4 md:p-8 bg-background-light dark:bg-background-dark overflow-y-auto">
     <div class="w-full mx-auto">
-        <!-- Page title -->
-        <div class="mb-10">
+        <!-- Page title & Back to POS -->
+        <div class="mb-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <h2 class="text-2xl sm:text-4xl font-bold text-[var(--text-primary)]">
                 {{ trans('messages.pos_orders_list', [], session('locale')) }}
             </h2>
+            <a href="{{ route('pos') }}"
+               class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[var(--primary-color)] text-white font-semibold hover:opacity-90 transition w-fit">
+                <span class="material-symbols-outlined text-xl">point_of_sale</span>
+                {{ trans('messages.back_to_pos', [], session('locale')) ?: 'Back to POS' }}
+            </a>
         </div>
 
         <!-- Search bar -->

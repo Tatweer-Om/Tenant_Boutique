@@ -85,9 +85,9 @@
         <span class="font-medium text-sm">{{ trans('messages.dashboard', [], session('locale')) }}</span>
     </a> --}}
 
-    <!-- 2. Point Of sale - التسليم الفوري -->
-    @if(in_array(8, $permissions) || in_array(10, $permissions))
-    {{-- <div>
+    <!-- 2. Point Of Sale -->
+    @if((in_array(8, $permissions) || in_array(10, $permissions)) && (\Nwidart\Modules\Facades\Module::isEnabled('Pos') || \Nwidart\Modules\Facades\Module::isEnabled('Channel')))
+    <div>
         @php
             $posMenuActive = strpos($currentPath, 'pos') === 0 || strpos($currentPath, 'channels') === 0;
         @endphp
@@ -95,13 +95,13 @@
             class="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg hover:bg-secondary hover:text-accent transition-colors {{ $posMenuActive ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
             <div class="flex items-center gap-3">
                 <span class="material-symbols-outlined text-xl">point_of_sale</span>
-                <span class="font-medium text-sm">{{ trans('messages.point_of_sale', [], session('locale'))}}</span>
+                <span class="font-medium text-sm">{{ trans('messages.point_of_sale', [], session('locale')) }}</span>
             </div>
             <span class="material-symbols-outlined text-sm transition-transform" id="arrow-posMenu">expand_more</span>
         </button>
 
         <div id="posMenu" class="submenu mt-2 pl-8 space-y-1 {{ $posMenuActive ? 'active' : '' }}">
-            @if(in_array(8, $permissions))
+            @if(in_array(8, $permissions) && \Nwidart\Modules\Facades\Module::isEnabled('Pos'))
             <a href="{{url('pos')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'pos' || (strpos(request()->path(), 'pos/') === 0 && request()->path() !== 'pos/orders/list')) ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
                 {{ trans('messages.pos', [], session('locale')) }}
@@ -113,14 +113,14 @@
             </a>
             @endif
 
-            @if(in_array(10, $permissions))
+            @if(in_array(10, $permissions) && \Nwidart\Modules\Facades\Module::isEnabled('Channel'))
             <a href="{{url('channels')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'channels') ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
                 {{ trans('messages.add_new_channel', [], session('locale')) }}
             </a>
             @endif
         </div>
-    </div> --}}
+    </div>
     @endif
 
     <!-- 3. Special order - طلبات التفصيل -->
@@ -130,10 +130,10 @@
    
 
     <!-- 5. Inventory -->
-    @if(in_array(9, $permissions) || in_array(6, $permissions))
+    @if((in_array(9, $permissions) || in_array(6, $permissions)) && (\Nwidart\Modules\Facades\Module::isEnabled('Stock') || \Nwidart\Modules\Facades\Module::isEnabled('StockCategory') || \Nwidart\Modules\Facades\Module::isEnabled('ManageQuantity')))
     <div>
         @php
-            $inventoryMenuActive = strpos($currentPath, 'manage_quantity') === 0 || strpos($currentPath, 'inventory') === 0 || strpos($currentPath, 'view_stock') === 0 || strpos($currentPath, 'stock') === 0 || strpos($currentPath, 'view_material') === 0 || strpos($currentPath, 'categories') === 0 || strpos($currentPath, 'movements_log') === 0 || strpos($currentPath, 'abaya-materials') === 0 || strpos($currentPath, 'stock/comprehensive-audit') === 0 || strpos($currentPath, 'stock/material-audit') === 0 || strpos($currentPath, 'material-quantity-audit') === 0;
+            $inventoryMenuActive = strpos($currentPath, 'manage_quantity') === 0 || strpos($currentPath, 'inventory') === 0 || strpos($currentPath, 'view_stock') === 0 || strpos($currentPath, 'stock') === 0 || strpos($currentPath, 'add_stock') === 0 || strpos($currentPath, 'edit_stock') === 0 || strpos($currentPath, 'view_material') === 0 || strpos($currentPath, 'categories') === 0 || strpos($currentPath, 'movements_log') === 0 || strpos($currentPath, 'abaya-materials') === 0 || strpos($currentPath, 'stock/comprehensive-audit') === 0 || strpos($currentPath, 'stock/material-audit') === 0 || strpos($currentPath, 'material-quantity-audit') === 0;
         @endphp
         <button onclick="toggleSubmenu('inventoryMenu')" 
             class="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg hover:bg-secondary hover:text-accent transition-colors {{ $inventoryMenuActive ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
@@ -145,48 +145,43 @@
         </button>
 
         <div id="inventoryMenu" class="submenu mt-2 pl-8 space-y-1 {{ $inventoryMenuActive ? 'active' : '' }}">
-            @if(in_array(9, $permissions))
-            <a href="{{url('view_stock')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'view_stock' || (strpos(request()->path(), 'stock') === 0 && trim(request()->path(), '/') !== 'stock/audit' && trim(request()->path(), '/') !== 'stock')) ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
+            @if(in_array(9, $permissions) && \Nwidart\Modules\Facades\Module::isEnabled('Stock'))
+            <a href="{{url('view_stock')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'view_stock' || (strpos(request()->path(), 'edit_stock') === 0) || (strpos(request()->path(), 'stock') === 0 && trim(request()->path(), '/') !== 'stock/audit' && trim(request()->path(), '/') !== 'stock')) ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
                 {{ trans('messages.inventory', [], session('locale')) }}
             </a>
+
+            <a href="{{url('add_stock')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'add_stock') ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ trans('messages.add_stock_lang', [], session('locale')) ?: 'Add Stock' }}
+            </a>
+
+            <a href="{{ route('stock.comprehensive_audit') }}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'stock/comprehensive-audit' || strpos(request()->path(), 'stock/comprehensive-audit') === 0) ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ trans('messages.stock_audit', [], session('locale')) }}
+            </a>
             @endif
 
-            {{-- @if(in_array(6, $permissions))
+            @if(in_array(6, $permissions) && \Nwidart\Modules\Facades\Module::isEnabled('ManageQuantity'))
             <a href="{{url('manage_quantity')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'manage_quantity') ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
                 {{ trans('messages.transfer_stock', [], session('locale')) }}
             </a>
-            @endif --}}
+            @endif
 
-            {{-- @if(in_array(6, $permissions))
-             <a href="{{url('movements_log')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'movements_log') ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
-                <span class="material-symbols-outlined text-sm">chevron_right</span> 
-                {{ trans('messages.movements_log', [], session('locale')) }}
-            </a>  
-            @endif --}}
-            
-            @if(in_array(9, $permissions))
-            {{-- <a href="{{route('stock.comprehensive_audit')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'stock/comprehensive-audit' || strpos(request()->path(), 'stock/comprehensive-audit') === 0) ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
-                <span class="material-symbols-outlined text-sm">chevron_right</span> 
-                {{ trans('messages.stock_audit', [], session('locale')) }}
-            </a> --}}
-
-           
+            @if(in_array(9, $permissions) && \Nwidart\Modules\Facades\Module::isEnabled('StockCategory'))
             <a href="{{url('categories')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'categories') ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
                 {{ trans('messages.category', [], session('locale')) }}
             </a>
-
-            
             @endif
         </div>
     </div>
     @endif
 
     <!-- 6. Boutiques -->
-    @if(in_array(11, $permissions))
-    {{-- <div>
+    @if(in_array(11, $permissions) && (\Nwidart\Modules\Facades\Module::isEnabled('Boutique') || \Nwidart\Modules\Facades\Module::isEnabled('Settlement')))
+    <div>
         @php
             $boutiquesMenuActive = in_array($currentPath, ['boutique_list', 'boutique', 'settlement']) || strpos($currentPath, 'boutique') === 0;
         @endphp
@@ -200,6 +195,7 @@
         </button>
 
         <div id="boutiquesMenu" class="submenu mt-2 pl-8 space-y-1 {{ $boutiquesMenuActive ? 'active' : '' }}">
+            @if(\Nwidart\Modules\Facades\Module::isEnabled('Boutique'))
             <a href="{{url('boutique_list')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'boutique_list') ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
                 {{ trans('messages.boutique_list', [], session('locale')) }}
@@ -209,13 +205,16 @@
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
                 {{ trans('messages.add_boutique', [], session('locale')) }}
             </a>
+            @endif
 
+            @if(\Nwidart\Modules\Facades\Module::isEnabled('Settlement'))
             <a href="{{url('settlement')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'settlement') ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
                 {{ trans('messages.settlement_lang', [], session('locale')) }}
             </a>
+            @endif
         </div>
-    </div> --}}
+    </div>
     @endif
 
     
@@ -524,73 +523,73 @@ function logout() {
 }
 
 // Load notifications
-async function loadNotifications() {
-    try {
-        const response = await fetch('/dashboard/notifications', {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json'
-            }
-        });
+// async function loadNotifications() {
+//     try {
+//         const response = await fetch('/dashboard/notifications', {
+//             method: 'GET',
+//             headers: {
+//                 'Accept': 'application/json'
+//             }
+//         });
         
-        const data = await response.json();
-        const notifList = document.getElementById('notifList');
-        const notifBadge = document.getElementById('notifBadge');
+//         const data = await response.json();
+//         const notifList = document.getElementById('notifList');
+//         const notifBadge = document.getElementById('notifBadge');
         
-        if (data.success && data.notifications && data.notifications.length > 0) {
-            // Update badge
-            if (notifBadge) {
-                notifBadge.textContent = data.count > 99 ? '99+' : data.count;
-                notifBadge.classList.remove('hidden');
-            }
+//         if (data.success && data.notifications && data.notifications.length > 0) {
+//             // Update badge
+//             if (notifBadge) {
+//                 notifBadge.textContent = data.count > 99 ? '99+' : data.count;
+//                 notifBadge.classList.remove('hidden');
+//             }
             
-            // Render notifications
-            notifList.innerHTML = data.notifications.map(notif => {
-                return `
-                    <li class="px-3 py-3 hover:bg-secondary/50 dark:hover:bg-primary/10 transition cursor-pointer" onclick="window.location.href='${notif.link}'">
-                        <div class="flex items-start gap-3">
-                            <span class="material-symbols-outlined ${notif.iconColor}">${notif.icon}</span>
-                            <div class="flex-1">
-                                <p class="text-sm font-medium">${notif.title}</p>
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">${notif.message}</p>
-                                ${notif.time ? `<p class="text-xs text-gray-400 dark:text-gray-500 mt-1">${notif.time}</p>` : ''}
-                            </div>
-                        </div>
-                    </li>
-                `;
-            }).join('');
-        } else {
-            // No notifications
-            if (notifBadge) {
-                notifBadge.classList.add('hidden');
-            }
-            notifList.innerHTML = `
-                <li class="px-3 py-4 text-center text-gray-500 text-sm">
-                    {{ trans('messages.no_notifications', [], session('locale')) ?: 'No notifications' }}
-                </li>
-            `;
-        }
-    } catch (error) {
-        console.error('Error loading notifications:', error);
-        const notifList = document.getElementById('notifList');
-        const notifBadge = document.getElementById('notifBadge');
-        if (notifBadge) {
-            notifBadge.classList.add('hidden');
-        }
-        if (notifList) {
-            notifList.innerHTML = `
-                <li class="px-3 py-4 text-center text-red-500 text-sm">
-                    {{ trans('messages.error_loading_data', [], session('locale')) }}
-                </li>
-            `;
-        }
-    }
-}
+//             // Render notifications
+//             notifList.innerHTML = data.notifications.map(notif => {
+//                 return `
+//                     <li class="px-3 py-3 hover:bg-secondary/50 dark:hover:bg-primary/10 transition cursor-pointer" onclick="window.location.href='${notif.link}'">
+//                         <div class="flex items-start gap-3">
+//                             <span class="material-symbols-outlined ${notif.iconColor}">${notif.icon}</span>
+//                             <div class="flex-1">
+//                                 <p class="text-sm font-medium">${notif.title}</p>
+//                                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">${notif.message}</p>
+//                                 ${notif.time ? `<p class="text-xs text-gray-400 dark:text-gray-500 mt-1">${notif.time}</p>` : ''}
+//                             </div>
+//                         </div>
+//                     </li>
+//                 `;
+//             }).join('');
+//         } else {
+//             // No notifications
+//             if (notifBadge) {
+//                 notifBadge.classList.add('hidden');
+//             }
+//             notifList.innerHTML = `
+//                 <li class="px-3 py-4 text-center text-gray-500 text-sm">
+//                     {{ trans('messages.no_notifications', [], session('locale')) ?: 'No notifications' }}
+//                 </li>
+//             `;
+//         }
+//     } catch (error) {
+//         console.error('Error loading notifications:', error);
+//         const notifList = document.getElementById('notifList');
+//         const notifBadge = document.getElementById('notifBadge');
+//         if (notifBadge) {
+//             notifBadge.classList.add('hidden');
+//         }
+//         if (notifList) {
+//             notifList.innerHTML = `
+//                 <li class="px-3 py-4 text-center text-red-500 text-sm">
+//                     {{ trans('messages.error_loading_data', [], session('locale')) }}
+//                 </li>
+//             `;
+//         }
+//     }
+// }
 
 // Load notifications on page load
-document.addEventListener('DOMContentLoaded', function() {
-    loadNotifications();
-    // Refresh notifications every 5 minutes
-    setInterval(loadNotifications, 5 * 60 * 1000);
-});
+// document.addEventListener('DOMContentLoaded', function() {
+//     loadNotifications();
+//     // Refresh notifications every 5 minutes
+//     setInterval(loadNotifications, 5 * 60 * 1000);
+// });
 </script>

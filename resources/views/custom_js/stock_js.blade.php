@@ -22,68 +22,7 @@ $(document).ready(function() {
         }
     });
 
-    $('#add_material').on('submit', function(e) {
-        e.preventDefault();
-
-        // --- Manual validations ---
-        let material_name     = $('#material_name').val().trim();
-        let material_unit     = $('#material_unit').val();
-        let material_category = $('#material_category').val();
-
-        if (!material_name) {
-            show_notification('error', '<?= trans("messages.enter_material_name", [], session("locale")) ?>');
-            return;
-        }
-
-        if (!material_unit) {
-            show_notification('error', '<?= trans("messages.enter_material_unit", [], session("locale")) ?>');
-            return;
-        }
-
-        if (!material_category) {
-            show_notification('error', '<?= trans("messages.enter_material_category", [], session("locale")) ?>');
-            return;
-        }
-
-        // --- FormData (includes file) ---
-        let formData = new FormData(this); // make sure <form> has enctype="multipart/form-data"
-
-        $.ajax({
-            url: "{{ route('add_material') }}",
-            type: "POST",
-            data: formData,
-            contentType: false,
-            processData: false,
-            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
-            beforeSend: function() {
-                // optional loader
-            },
-            success: function(response) {
-                if(response.status === 'success') {
-                    show_notification('success', response.message);
-                    $('#add_material')[0].reset();
-                    $('#imagePreview').attr('src','').hide();
-                    // Redirect to material list
-                    if (response.redirect_url) {
-                        setTimeout(function() {
-                            window.location.href = response.redirect_url;
-                        }, 1000);
-                    }
-                }
-            },
-            error: function(xhr) {
-                if(xhr.status === 422) {
-                    let errors = xhr.responseJSON.errors;
-                    $.each(errors, function(key, value) {
-                        show_notification('error', value[0]); // show first validation error
-                    });
-                } else {
-                    show_notification('error', '<?= trans("messages.something_went_wrong", [], session("locale")) ?: "Something went wrong!" ?>');
-                }
-            }
-        });
-    });
-
+  
       $('#abaya_form').on('submit', function(e) {
     e.preventDefault();
 
@@ -249,22 +188,22 @@ $(document).ready(function() {
 });
 
 
-document.getElementById('material_image').addEventListener('change', function(event) {
-    const file = event.target.files[0];
-    if (!file) return;
+// document.getElementById('material_image').addEventListener('change', function(event) {
+//     const file = event.target.files[0];
+//     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const img = document.getElementById('imagePreview');
-        img.src = e.target.result;
-        img.classList.remove('hidden');
+//     const reader = new FileReader();
+//     reader.onload = function(e) {
+//         const img = document.getElementById('imagePreview');
+//         img.src = e.target.result;
+//         img.classList.remove('hidden');
 
-        // Hide icon and text
-        document.getElementById('uploadIcon').style.display = 'none';
-        document.getElementById('uploadText').style.display = 'none';
-    };
-    reader.readAsDataURL(file);
-});
+//         // Hide icon and text
+//         document.getElementById('uploadIcon').style.display = 'none';
+//         document.getElementById('uploadText').style.display = 'none';
+//     };
+//     reader.readAsDataURL(file);
+// });
 function imageUploader() {
     return {
         images: [],

@@ -1,0 +1,23 @@
+{
+    "name": "nwidart/manage-quantity",
+    "description": "Manage Quantity module for transfers",
+    "authors": [
+        {
+            "name": "Nicolas Widart",
+            "email": "n.widart@gmail.com"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\ManageQuantity\\": "app/",
+            "Modules\\ManageQuantity\\Database\\Factories\\": "database/factories/"
+        },
+        "classmap": []
+    }
+}

@@ -1,0 +1,11 @@
+{
+    "name": "Boutique",
+    "alias": "boutique",
+    "description": "Boutique management module for rent and invoices",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Boutique\\Providers\\BoutiqueServiceProvider"
+    ],
+    "files": []
+}

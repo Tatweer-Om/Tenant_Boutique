@@ -216,20 +216,20 @@ Route::post('upload_img', [ResaleController::class, 'upload_img'])->name('upload
 Route::delete('delete_image', [ResaleController::class, 'delete_image'])->name('delete_image');
 Route::delete('del_img', [ResaleController::class, 'del_img'])->name('del_img');
 
-Route::get('material', [MaterialController::class, 'index'])->name('material');
-Route::get('add_material', [MaterialController::class, 'add_material_view'])->name('add_material.view');
-Route::post('add_material', [MaterialController::class, 'add_material'])->name('add_material');
-Route::get('material/list', [MaterialController::class, 'getmaterial']);
-Route::get('materials/all', [MaterialController::class, 'getAllMaterials'])->name('materials.all');
-Route::get('materials/{id}', [MaterialController::class, 'getMaterial33'])->where('id', '[0-9]+')->name('materials.get');
-Route::get('edit_material/{id}', [MaterialController::class, 'edit_material'])->name('edit_material');
-Route::post('update_material', [MaterialController::class, 'update_material'])->name('update_material');
-Route::delete('/delete_material/{id}', [MaterialController::class, 'delete_material'])->name('delete_material');
-Route::get('view_material', [MaterialController::class, 'view_material'])->name('view_material');
-Route::post('materials/add-quantity', [MaterialController::class, 'addQuantity'])->name('materials.add_quantity');
-Route::post('send_material_to_tailor', [TailorController::class, 'send_material_to_tailor'])->name('send_material_to_tailor');
-Route::get('material-quantity-audit', [MaterialController::class, 'materialQuantityAudit'])->name('material.quantity_audit');
-Route::get('material-quantity-audit/data', [MaterialController::class, 'getMaterialQuantityAuditData'])->name('material.quantity_audit.data');
+// Route::get('material', [MaterialController::class, 'index'])->name('material');
+// Route::get('add_material', [MaterialController::class, 'add_material_view'])->name('add_material.view');
+// Route::post('add_material', [MaterialController::class, 'add_material'])->name('add_material');
+// Route::get('material/list', [MaterialController::class, 'getmaterial']);
+// Route::get('materials/all', [MaterialController::class, 'getAllMaterials'])->name('materials.all');
+// Route::get('materials/{id}', [MaterialController::class, 'getMaterial33'])->where('id', '[0-9]+')->name('materials.get');
+// Route::get('edit_material/{id}', [MaterialController::class, 'edit_material'])->name('edit_material');
+// Route::post('update_material', [MaterialController::class, 'update_material'])->name('update_material');
+// Route::delete('/delete_material/{id}', [MaterialController::class, 'delete_material'])->name('delete_material');
+// Route::get('view_material', [MaterialController::class, 'view_material'])->name('view_material');
+// Route::post('materials/add-quantity', [MaterialController::class, 'addQuantity'])->name('materials.add_quantity');
+// Route::post('send_material_to_tailor', [TailorController::class, 'send_material_to_tailor'])->name('send_material_to_tailor');
+// Route::get('material-quantity-audit', [MaterialController::class, 'materialQuantityAudit'])->name('material.quantity_audit');
+// Route::get('material-quantity-audit/data', [MaterialController::class, 'getMaterialQuantityAuditData'])->name('material.quantity_audit.data');
 
 Route::get('stock', [StockController::class, 'index'])->name('stock');
 Route::post('add_stock', [StockController::class, 'add_stock'])->name('add_stock');

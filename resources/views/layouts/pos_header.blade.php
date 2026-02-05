@@ -220,6 +220,13 @@
       <!-- Right -->
       <div class="flex items-center gap-4">
 
+        <!-- Orders List -->
+        <a href="{{ route('pos.orders.list') }}"
+           class="flex items-center gap-2 h-12 px-5 rounded-full font-bold bg-primary/10 text-primary-dark hover:bg-primary hover:text-white transition-colors">
+          <span class="material-symbols-outlined text-xl">receipt_long</span>
+          <span class="hidden xl:inline">{{ trans('messages.pos_orders_list', [], session('locale')) ?: 'Orders List' }}</span>
+        </a>
+
         <!-- Notifications -->
         <button
           id="notificationBtn"
@@ -285,6 +292,13 @@
 
       <!-- Actions -->
       <div class="flex items-center gap-2">
+
+        <!-- Orders List (Mobile) -->
+        <a href="{{ route('pos.orders.list') }}"
+           class="size-10 rounded-full bg-gray-50 hover:bg-primary/10 flex items-center justify-center"
+           title="{{ trans('messages.pos_orders_list', [], session('locale')) ?: 'Orders List' }}">
+          <span class="material-symbols-outlined text-xl text-gray-600">receipt_long</span>
+        </a>
 
         <!-- Notifications -->
         <button

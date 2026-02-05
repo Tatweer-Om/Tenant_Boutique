@@ -1,7 +1,20 @@
 <script>
-function openDetails(transfer) {
+function openDetails(transferData) {
+    let transfer;
+    try {
+        transfer = typeof transferData === 'string' ? JSON.parse(transferData) : transferData;
+    } catch (e) {
+        console.error('Invalid transfer data:', e);
+        return;
+    }
     const modal = document.getElementById('detailsModal');
     const content = document.getElementById('detailsContent');
+    if (!modal || !content) return;
+    if (!transfer || !Array.isArray(transfer.items)) {
+        content.innerHTML = '<p class="text-gray-500">{{ trans("messages.no_data_found", [], session("locale")) ?: "No data found" }}</p>';
+        modal.classList.remove('hidden');
+        return;
+    }
     
     let html = `
         <div class="space-y-4">
